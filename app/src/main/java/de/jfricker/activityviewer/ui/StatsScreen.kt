@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.jfricker.activityviewer.domain.CYCLING_TYPES
+import de.jfricker.activityviewer.domain.HIKING_TYPES
+import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.Sums
 import de.jfricker.activityviewer.domain.YearOverview
 import java.text.NumberFormat
@@ -44,21 +46,49 @@ private enum class Metric(val label: String, val unit: String) {
     ELEVATION("Höhenmeter", "m")
 }
 
-private enum class Group(val label: String) {
-    CYCLING("Radfahren"),
-    HIKING("Wandern")
+private enum class Group(val label: String, val title: String) {
+    CYCLING("Radfahren", "Radfahren"),
+    HIKING("Wandern", "Wandern"),
+    SKI("Skitouren", "Skitouren"),
+    TOTAL("Total", "Alle Aktivitäten")
 }
 
-private val cyclingLabels = mapOf(
-    "cycling" to "Rad",
-    "road_biking" to "Rennrad",
-    "mountain_biking" to "MTB",
-    "gravel_cycling" to "Gravel"
+/** Eine Serie = ein Segment im gestapelten Balken und eine Spalte in der Tabelle. */
+private class Series(
+    val label: String,
+    val color: Color,
+    val pick: (YearOverview) -> Sums
 )
-private val cyclingColors = listOf(
-    Color(0xFF1E88E5), Color(0xFFE53935), Color(0xFF43A047), Color(0xFFFB8C00)
+
+private fun typeSeries(type: String, label: String, color: Color) =
+    Series(label, color) { it.byType.getValue(type) }
+
+private val groupSeries: Map<Group, List<Series>> = mapOf(
+    Group.CYCLING to listOf(
+        typeSeries(CYCLING_TYPES[0], "Rad", Color(0xFF1E88E5)),
+        typeSeries(CYCLING_TYPES[1], "Rennrad", Color(0xFFE53935)),
+        typeSeries(CYCLING_TYPES[2], "MTB", Color(0xFF43A047)),
+        typeSeries(CYCLING_TYPES[3], "Gravel", Color(0xFFFB8C00))
+    ),
+    Group.HIKING to listOf(
+        typeSeries(HIKING_TYPES[0], "Gehen", Color(0xFF6D4C41)),
+        typeSeries(HIKING_TYPES[1], "Laufen", Color(0xFF8E24AA)),
+        typeSeries(HIKING_TYPES[2], "Bergtour", Color(0xFF00897B)),
+        typeSeries(HIKING_TYPES[3], "Wandern", Color(0xFFFDD835))
+    ),
+    Group.SKI to listOf(
+        Series("Skitouren", Color(0xFF00ACC1)) { it.sum(SKI_TYPES) }
+    ),
+    Group.TOTAL to listOf(
+        Series("Rad", Color(0xFF1E88E5)) { it.sum(CYCLING_TYPES) },
+        Series("Wandern", Color(0xFF6D4C41)) { it.sum(HIKING_TYPES) },
+        Series("Ski", Color(0xFF00ACC1)) { it.sum(SKI_TYPES) },
+        Series("Sonstige", Color(0xFF9E9E9E)) { it.rest }
+    )
 )
-private val hikingColor = Color(0xFF6D4C41)
+
+/** Gruppen, bei denen die Tabelle zusaetzlich die Anzahl der Aktivitaeten zeigt. */
+private val groupsWithCount = setOf(Group.SKI)
 
 private const val CHART_HEIGHT = 200f
 
@@ -75,21 +105,16 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
     var group by rememberSaveable { mutableStateOf(Group.CYCLING) }
     val fmt = remember { NumberFormat.getIntegerInstance(Locale.forLanguageTag("de-CH")) }
 
+    val series = groupSeries.getValue(group)
+    val showTotal = series.size > 1
+    val showCount = group in groupsWithCount
+
+    fun countOf(y: YearOverview): Int = series.sumOf { it.pick(y).count }
+
     fun pick(s: Sums): Double = if (metric == Metric.KM) s.km else s.elevation
 
-    // Serien (Segmente der Balken) und Werte je Jahr
-    val labels: List<String>
-    val colors: List<Color>
-    val valuesPerYear: List<List<Double>>
-    if (group == Group.CYCLING) {
-        labels = CYCLING_TYPES.map { cyclingLabels.getValue(it) }
-        colors = cyclingColors
-        valuesPerYear = overview.map { y -> CYCLING_TYPES.map { pick(y.cycling.getValue(it)) } }
-    } else {
-        labels = listOf("Wandern")
-        colors = listOf(hikingColor)
-        valuesPerYear = overview.map { listOf(pick(it.hiking)) }
-    }
+    val valuesPerYear: List<List<Double>> =
+        overview.map { y -> series.map { pick(it.pick(y)) } }
 
     Column(
         modifier
@@ -107,7 +132,10 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Group.entries.forEach {
                 FilterChip(
                     selected = group == it,
@@ -118,24 +146,25 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
         }
 
         Text(
-            "${group.label}: ${metric.label} pro Jahr (${metric.unit})",
+            "${group.title}: ${metric.label} pro Jahr (${metric.unit})",
             style = MaterialTheme.typography.titleMedium
         )
 
-        if (group == Group.CYCLING) Legend(labels, colors)
+        if (showTotal) Legend(series)
 
         StackedBarChart(
             years = overview.map { it.year },
             valuesPerYear = valuesPerYear,
-            colors = colors,
+            colors = series.map { it.color },
             format = { fmt.format(it) }
         )
 
         // Tabelle: neuestes Jahr oben
         val header = buildList {
             add("Jahr")
-            addAll(labels)
-            if (group == Group.CYCLING) add("Total")
+            series.forEach { add(it.label) }
+            if (showTotal) add("Total")
+            if (showCount) add("Touren")
         }
         TableRow(header, bold = true)
         HorizontalDivider()
@@ -144,37 +173,39 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
             val cells = buildList {
                 add(overview[i].year.toString())
                 v.forEach { add(fmt.format(it)) }
-                if (group == Group.CYCLING) add(fmt.format(v.sum()))
+                if (showTotal) add(fmt.format(v.sum()))
+                if (showCount) add(countOf(overview[i]).toString())
             }
             TableRow(cells)
         }
         HorizontalDivider()
         val sumCells = buildList {
             add("Alle")
-            labels.indices.forEach { c -> add(fmt.format(valuesPerYear.sumOf { it[c] })) }
-            if (group == Group.CYCLING) add(fmt.format(valuesPerYear.sumOf { it.sum() }))
+            series.indices.forEach { c -> add(fmt.format(valuesPerYear.sumOf { it[c] })) }
+            if (showTotal) add(fmt.format(valuesPerYear.sumOf { it.sum() }))
+            if (showCount) add(overview.sumOf { countOf(it) }.toString())
         }
         TableRow(sumCells, bold = true)
     }
 }
 
 @Composable
-private fun Legend(labels: List<String>, colors: List<Color>) {
+private fun Legend(series: List<Series>) {
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        labels.forEachIndexed { i, label ->
+        series.forEach { s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .size(12.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(colors[i])
+                        .background(s.color)
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(label, style = MaterialTheme.typography.labelMedium)
+                Text(s.label, style = MaterialTheme.typography.labelMedium)
             }
         }
     }

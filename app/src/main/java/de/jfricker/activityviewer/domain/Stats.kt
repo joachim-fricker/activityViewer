@@ -2,11 +2,12 @@ package de.jfricker.activityviewer.domain
 
 import de.jfricker.activityviewer.data.local.YearTypeSum
 
-/** Radfahren: jeder Typ einzeln plus Total. */
 val CYCLING_TYPES = listOf("cycling", "road_biking", "mountain_biking", "gravel_cycling")
+val HIKING_TYPES = listOf("walking", "running", "mountaineering", "hiking")
+/** Garmin-Typ "other" wird hier bewusst als Skitour gezaehlt (alle bisherigen "other" sind Skitouren). */
+val SKI_TYPES = listOf("backcountry_skiing", "other")
 
-/** Wandern: alle diese Typen werden zu einem Wert zusammengefasst. */
-val HIKING_TYPES = setOf("walking", "running", "mountaineering", "hiking")
+private val GROUPED_TYPES = (CYCLING_TYPES + HIKING_TYPES + SKI_TYPES).toSet()
 
 data class Sums(val km: Double = 0.0, val elevation: Double = 0.0, val count: Int = 0) {
     operator fun plus(o: Sums) = Sums(km + o.km, elevation + o.elevation, count + o.count)
@@ -14,10 +15,16 @@ data class Sums(val km: Double = 0.0, val elevation: Double = 0.0, val count: In
 
 data class YearOverview(
     val year: Int,
-    val cycling: Map<String, Sums>,   // Schluessel = typeKey aus CYCLING_TYPES
-    val hiking: Sums
+    /** Summen je bekanntem typeKey (alle Typen aus den obigen Listen sind enthalten). */
+    val byType: Map<String, Sums>,
+    /** Alle uebrigen Aktivitaetstypen zusammen (ausserhalb der Gruppen). */
+    val rest: Sums
 ) {
-    val cyclingTotal: Sums get() = cycling.values.fold(Sums()) { a, b -> a + b }
+    fun sum(types: List<String>): Sums =
+        types.fold(Sums()) { acc, t -> acc + (byType[t] ?: Sums()) }
+
+    /** Summe ueber wirklich alle Aktivitaeten des Jahres. */
+    val total: Sums get() = byType.values.fold(rest) { a, b -> a + b }
 }
 
 private fun YearTypeSum.toSums() = Sums(distanceM / 1000.0, elevationGain, cnt)
@@ -30,11 +37,11 @@ fun buildOverview(rows: List<YearTypeSum>): List<YearOverview> {
     val last = byYear.keys.max()
     return (first..last).map { year ->
         val r = byYear[year].orEmpty()
-        val cycling = CYCLING_TYPES.associateWith { type ->
+        val byType = GROUPED_TYPES.associateWith { type ->
             r.filter { it.typeKey == type }.fold(Sums()) { acc, x -> acc + x.toSums() }
         }
-        val hiking = r.filter { it.typeKey in HIKING_TYPES }
+        val rest = r.filter { it.typeKey !in GROUPED_TYPES }
             .fold(Sums()) { acc, x -> acc + x.toSums() }
-        YearOverview(year, cycling, hiking)
+        YearOverview(year, byType, rest)
     }
 }
