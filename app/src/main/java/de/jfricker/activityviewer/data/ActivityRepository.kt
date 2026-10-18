@@ -19,6 +19,8 @@ class ActivityRepository(
 ) {
     fun count() = dao.count()
 
+    fun yearTypeSums() = dao.yearTypeSums()
+
     /** Liest ids.txt, laedt nur fehlende Aktivitaeten. */
     suspend fun sync(
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }

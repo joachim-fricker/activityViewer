@@ -16,4 +16,17 @@ interface ActivityDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(activity: ActivityEntity)
+
+    @Query(
+        """
+        SELECT year, typeKey,
+               SUM(distanceM) AS distanceM,
+               SUM(elevationGain) AS elevationGain,
+               COUNT(*) AS cnt
+        FROM activity
+        GROUP BY year, typeKey
+        ORDER BY year
+        """
+    )
+    fun yearTypeSums(): Flow<List<YearTypeSum>>
 }
