@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Einfarbige Variante fuer "Designfarben"-Icons: Kontrast nur ueber Deckkraft -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillAlpha="0.35"
+        android:pathData="M24,80 L36,71 L54,42 L68,60 L76,55 L86,62 L86,80 Z" />
+    <path
+        android:pathData="M41,79 C47,78 51,79 52,74.5 C53,70 47,69 49.5,64.5 C52,60.5 57,61 56,56.5 C55.5,53 54,51 54,45"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M41,79m-3.4,0a3.4,3.4 0,1 1,6.8 0a3.4,3.4 0,1 1,-6.8 0" />
+    <path
+        android:pathData="M54,45 L54,34.5"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,34.5 L60.5,37 L54,39.5 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M70,38m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+</vector>
