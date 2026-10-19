@@ -15,3 +15,13 @@ private val TYPE_LABELS = mapOf(
 )
 
 fun typeLabel(typeKey: String): String = TYPE_LABELS[typeKey] ?: typeKey
+
+/** Garmin-Typen fuer Indoor-/virtuelle Radfahrten (z. B. Rouvy, Zwift, Rollentrainer). */
+private val INDOOR_TYPES = setOf("virtual_ride", "indoor_cycling")
+
+/**
+ * Indoor-Aktivitaet? Rouvy liefert GPS-Koordinaten der virtuellen Strecke mit,
+ * deshalb zusaetzlich am Namen erkennen.
+ */
+fun isIndoor(typeKey: String, name: String): Boolean =
+    typeKey in INDOOR_TYPES || name.contains("rouvy", ignoreCase = true)

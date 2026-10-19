@@ -48,6 +48,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.isIndoor
 import de.jfricker.activityviewer.domain.typeLabel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -105,7 +106,10 @@ fun WorldMapScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var listIds by remember { mutableStateOf<List<Long>?>(null) }
     var detailId by rememberSaveable { mutableStateOf<Long?>(null) }
 
-    val withStart = remember(all) { all.filter { it.startLat != null && it.startLon != null } }
+    // Nur Outdoor-Touren mit Startpunkt (Indoor/Rouvy gehoert nicht auf die Karte)
+    val withStart = remember(all) {
+        all.filter { it.startLat != null && it.startLon != null && !isIndoor(it.typeKey, it.name) }
+    }
     val visible = remember(withStart, quick) {
         val types = quick.types
         if (types == null) withStart else withStart.filter { it.typeKey in types }
