@@ -13,7 +13,9 @@ class GitHubClient(private val http: OkHttpClient = OkHttpClient()) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun fetchIds(): List<Long> = withContext(Dispatchers.IO) {
-        get("ids.txt")
+        // Der Zeitstempel umgeht den CDN-Cache von raw.githubusercontent.com (ca. 5 Minuten),
+        // damit eine frisch vom Workflow aktualisierte ids.txt sofort sichtbar ist.
+        get("ids.txt?nocache=${System.currentTimeMillis()}")
             .lineSequence()
             .mapNotNull { it.trim().toLongOrNull() }
             .toList()
@@ -24,7 +26,10 @@ class GitHubClient(private val http: OkHttpClient = OkHttpClient()) {
     }
 
     private fun get(file: String): String {
-        val request = Request.Builder().url("${Config.RAW_BASE}/$file").build()
+        val request = Request.Builder()
+            .url("${Config.RAW_BASE}/$file")
+            .header("Cache-Control", "no-cache")
+            .build()
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code} bei $file")
             return response.body?.string() ?: throw IOException("Leere Antwort bei $file")
