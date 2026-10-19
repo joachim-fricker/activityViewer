@@ -2,15 +2,24 @@ package de.jfricker.activityviewer.data
 
 import de.jfricker.activityviewer.data.local.ActivityDao
 import de.jfricker.activityviewer.data.remote.GitHubClient
+import de.jfricker.activityviewer.data.remote.GpxParser
+import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.boundingBox
+import de.jfricker.activityviewer.domain.decodePolyline
+import de.jfricker.activityviewer.domain.encodePolyline
+import de.jfricker.activityviewer.domain.simplify
 import de.jfricker.activityviewer.data.remote.WorkflowClient
 import de.jfricker.activityviewer.data.remote.WorkflowRun
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
+import org.xmlpull.v1.XmlPullParserException
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -28,6 +37,27 @@ class ActivityRepository(
     fun activityRows() = dao.activityRows()
 
     fun activity(id: Long) = dao.activity(id)
+
+    /**
+     * Liefert den vereinfachten Track einer Aktivitaet. Beim ersten Aufruf wird die GPX
+     * von GitHub geladen, vereinfacht und zusammen mit der Bounding-Box in der DB gespeichert
+     * (Grundlage fuer die spaetere Umkreissuche). Leere Liste = kein GPS-Track vorhanden.
+     */
+    suspend fun track(id: Long): List<GeoPoint> {
+        dao.trackOf(id)?.let { return decodePolyline(it) }
+
+        val gpx = client.fetchGpx(id)
+        val points = if (gpx == null) emptyList() else withContext(Dispatchers.Default) {
+            try {
+                simplify(GpxParser.parse(gpx), TRACK_TOLERANCE_M)
+            } catch (e: XmlPullParserException) {
+                throw IOException("GPX-Datei nicht lesbar", e)
+            }
+        }
+        val box = boundingBox(points)
+        dao.updateTrack(id, box?.minLat, box?.maxLat, box?.minLon, box?.maxLon, encodePolyline(points))
+        return points
+    }
 
     /**
      * Startet den GitHub-Workflow (laedt neue Aktivitaeten von Garmin ins Repo)
@@ -91,5 +121,6 @@ class ActivityRepository(
     private companion object {
         const val POLL_INTERVAL_MS = 4_000L
         const val MAX_POLLS = 75          // ca. 5 Minuten
+        const val TRACK_TOLERANCE_M = 5.0 // Vereinfachung: max. Abweichung vom Original
     }
 }

@@ -25,6 +25,18 @@ class GitHubClient(private val http: OkHttpClient = OkHttpClient()) {
         json.decodeFromString<ActivityDto>(get("$id.json"))
     }
 
+    /** GPX-Datei als Text; null, wenn es keine gibt (HTTP 404, z. B. Aktivitaet ohne GPS). */
+    suspend fun fetchGpx(id: Long): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("${Config.RAW_BASE}/$id.gpx").build()
+        http.newCall(request).execute().use { response ->
+            when {
+                response.code == 404 -> null
+                !response.isSuccessful -> throw IOException("HTTP ${response.code} bei $id.gpx")
+                else -> response.body?.string() ?: throw IOException("Leere Antwort bei $id.gpx")
+            }
+        }
+    }
+
     private fun get(file: String): String {
         val request = Request.Builder()
             .url("${Config.RAW_BASE}/$file")

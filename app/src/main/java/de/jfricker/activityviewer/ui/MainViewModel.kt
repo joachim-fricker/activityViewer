@@ -3,10 +3,12 @@ package de.jfricker.activityviewer.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.jfricker.activityviewer.data.ActivityRepository
+import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
+import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.buildOverview
 import kotlinx.coroutines.CancellationException
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -35,9 +38,17 @@ sealed interface SyncState {
             this is Checking || this is Loading
 }
 
+sealed interface TrackState {
+    data object Loading : TrackState
+    data class Loaded(val points: List<GeoPoint>) : TrackState
+    data object NoTrack : TrackState
+    data class Error(val message: String) : TrackState
+}
+
 class MainViewModel(
     private val repo: ActivityRepository,
-    private val tokenStore: TokenStore
+    private val tokenStore: TokenStore,
+    private val location: LocationProvider
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -59,6 +70,21 @@ class MainViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun activity(id: Long): Flow<ActivityEntity?> = repo.activity(id)
+
+    fun track(id: Long): Flow<TrackState> = flow {
+        emit(TrackState.Loading)
+        val result = try {
+            val points = repo.track(id)
+            if (points.isEmpty()) TrackState.NoTrack else TrackState.Loaded(points)
+        } catch (e: IOException) {
+            TrackState.Error(e.message ?: "Netzwerkfehler")
+        }
+        emit(result)
+    }
+
+    fun hasLocationPermission(): Boolean = location.hasPermission()
+
+    fun myLocation(): Flow<GeoPoint?> = location.updates()
 
     // Beim App-Start nur der interne Sync, der Garmin-Workflow laeuft nur auf Knopfdruck.
     init { sync(withGarmin = false) }

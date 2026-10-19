@@ -1,6 +1,9 @@
 package de.jfricker.activityviewer.ui
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +55,7 @@ import de.jfricker.activityviewer.domain.CYCLING_TYPES
 import de.jfricker.activityviewer.domain.HIKING_TYPES
 import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.typeLabel
+import kotlinx.coroutines.flow.flowOf
 import java.text.Collator
 import java.text.NumberFormat
 import java.util.Locale
@@ -295,21 +301,105 @@ private fun ActivityDetailScreen(
     val activity by flow.collectAsStateWithLifecycle(initialValue = null)
     val fmtKm = remember { km1() }
     val fmtInt = remember { NumberFormat.getIntegerInstance(LOCALE) }
+    var mapExpanded by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+    Column(modifier.fillMaxSize()) {
+        TextButton(
+            onClick = onBack,
+            contentPadding = PaddingValues(horizontal = 16.dp)
+        ) {
             Text("← Zurück zur Liste")
         }
 
-        val a = activity
-        if (a == null) Text("Lade …") else ActivityDetails(a, fmtKm, fmtInt)
-        Spacer(Modifier.height(16.dp))
+        val mapModifier = if (mapExpanded) {
+            Modifier.fillMaxWidth().weight(1f)
+        } else {
+            Modifier.fillMaxWidth().height(320.dp)
+        }
+        TrackSection(vm, id, mapExpanded, { mapExpanded = !mapExpanded }, mapModifier)
+
+        if (!mapExpanded) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                val a = activity
+                if (a == null) Text("Lade …") else ActivityDetails(a, fmtKm, fmtInt)
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+/** Nur einmal pro App-Start nach der Standort-Berechtigung fragen. */
+private var locationPermissionAsked = false
+
+@Composable
+private fun TrackSection(
+    vm: MainViewModel,
+    id: Long,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    mapModifier: Modifier
+) {
+    var retry by remember { mutableIntStateOf(0) }
+    val trackFlow = remember(id, retry) { vm.track(id) }
+    val state by trackFlow.collectAsStateWithLifecycle(initialValue = TrackState.Loading)
+
+    var hasPermission by remember { mutableStateOf(vm.hasLocationPermission()) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result -> hasPermission = result.values.any { it } }
+    LaunchedEffect(Unit) {
+        if (!hasPermission && !locationPermissionAsked) {
+            locationPermissionAsked = true
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+    val locationFlow = remember(hasPermission) {
+        if (hasPermission) vm.myLocation() else flowOf(null)
+    }
+    val me by locationFlow.collectAsStateWithLifecycle(initialValue = null)
+
+    when (val s = state) {
+        is TrackState.Loading -> Box(mapModifier, contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(8.dp))
+                Text("Lade Track …", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        is TrackState.Loaded -> TrackMap(
+            track = s.points,
+            me = me,
+            expanded = expanded,
+            onToggleExpanded = onToggleExpanded,
+            modifier = mapModifier
+        )
+        is TrackState.NoTrack -> Text(
+            "Für diese Aktivität gibt es keinen GPS-Track.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        is TrackState.Error -> Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Track konnte nicht geladen werden: ${s.message}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { retry++ }) { Text("Erneut") }
+        }
     }
 }
 
@@ -354,11 +444,6 @@ private fun ActivityDetails(a: ActivityEntity, fmtKm: NumberFormat, fmtInt: Numb
         DetailLine("Aktivitäts-ID", a.id.toString())
 
         Spacer(Modifier.height(12.dp))
-        Text(
-            "Die Track-Karte folgt mit der GPX-Verarbeitung.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         OutlinedButton(onClick = {
             uriHandler.openUri("https://connect.garmin.com/modern/activity/${a.id}")
         }) {
