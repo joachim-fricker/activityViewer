@@ -23,6 +23,7 @@ data class ActivityEntity(
     val endLon: Double?,
     val locationName: String?,
     val avgSpeed: Double?,
+    val maxSpeed: Double? = null,   // m/s
     val avgHr: Double?,
     val calories: Double?,
     val minElev: Double?,

@@ -344,13 +344,13 @@ private fun ActivityDetails(a: ActivityEntity, fmtKm: NumberFormat, fmtInt: Numb
                 DetailLine("Ø Pace", "${formatPace(1000.0 / mps)} /km")
             }
         }
+        a.maxSpeed?.takeIf { it > 0 }?.let { mps ->
+            DetailLine("Max. Geschwindigkeit", "${fmtKm.format(mps * 3.6)} km/h")
+        }
         a.minElev?.let { DetailLine("Tiefster Punkt", "${fmtInt.format(it)} m") }
         a.maxElev?.let { DetailLine("Höchster Punkt", "${fmtInt.format(it)} m") }
         a.avgHr?.let { DetailLine("Ø Puls", "${fmtInt.format(it)} bpm") }
         a.calories?.let { DetailLine("Kalorien", "${fmtInt.format(it)} kcal") }
-        if (a.startLat != null && a.startLon != null) {
-            DetailLine("Start", "%.5f, %.5f".format(Locale.ROOT, a.startLat, a.startLon))
-        }
         DetailLine("Aktivitäts-ID", a.id.toString())
 
         Spacer(Modifier.height(12.dp))
