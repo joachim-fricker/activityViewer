@@ -29,4 +29,15 @@ interface ActivityDao {
         """
     )
     fun yearTypeSums(): Flow<List<YearTypeSum>>
+
+    @Query(
+        """
+        SELECT id, name, typeKey, startTime, distanceM, durationS, elevationGain, locationName
+        FROM activity
+        """
+    )
+    fun activityRows(): Flow<List<ActivityRow>>
+
+    @Query("SELECT * FROM activity WHERE id = :id")
+    fun activity(id: Long): Flow<ActivityEntity?>
 }

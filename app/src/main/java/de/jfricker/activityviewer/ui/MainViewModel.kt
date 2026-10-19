@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import de.jfricker.activityviewer.data.ActivityRepository
 import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
+import de.jfricker.activityviewer.data.local.ActivityEntity
+import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.buildOverview
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +53,12 @@ class MainViewModel(
         repo.yearTypeSums()
             .map { buildOverview(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val activities: StateFlow<List<ActivityRow>> =
+        repo.activityRows()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun activity(id: Long): Flow<ActivityEntity?> = repo.activity(id)
 
     // Beim App-Start nur der interne Sync, der Garmin-Workflow laeuft nur auf Knopfdruck.
     init { sync(withGarmin = false) }

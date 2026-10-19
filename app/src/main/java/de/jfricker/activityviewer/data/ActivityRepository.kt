@@ -25,6 +25,10 @@ class ActivityRepository(
 
     fun yearTypeSums() = dao.yearTypeSums()
 
+    fun activityRows() = dao.activityRows()
+
+    fun activity(id: Long) = dao.activity(id)
+
     /**
      * Startet den GitHub-Workflow (laedt neue Aktivitaeten von Garmin ins Repo)
      * und wartet, bis er fertig ist. Wirft IOException bei Fehlern oder Zeitueberschreitung.

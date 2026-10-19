@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import de.jfricker.activityviewer.ui.ActivitiesScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.StatsScreen
 import de.jfricker.activityviewer.ui.SyncScreen
@@ -56,10 +57,12 @@ fun AppContent(vm: MainViewModel) {
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         PrimaryTabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Statistik") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Sync") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Aktivitäten") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview)
+            1 -> ActivitiesScreen(vm)
             else -> SyncScreen(vm)
         }
     }
