@@ -4,6 +4,12 @@ import de.jfricker.activityviewer.data.local.ActivityDao
 import de.jfricker.activityviewer.data.remote.GitHubClient
 import de.jfricker.activityviewer.data.remote.GpxParser
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.boundingBox
+import de.jfricker.activityviewer.domain.boxAround
+import de.jfricker.activityviewer.domain.decodePolyline
+import de.jfricker.activityviewer.domain.distanceToTrackM
+import de.jfricker.activityviewer.domain.encodePolyline
+import de.jfricker.activityviewer.domain.isIndoor
 import de.jfricker.activityviewer.domain.simplify
 import de.jfricker.activityviewer.data.remote.WorkflowClient
 import de.jfricker.activityviewer.data.remote.WorkflowRun
@@ -21,6 +27,9 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 data class SyncResult(val remoteTotal: Int, val imported: Int, val failed: Int)
+
+/** Treffer der Umkreissuche: Abstand vom Suchpunkt zum Track und der (grobe) Track. */
+data class NearbyHit(val id: Long, val distanceM: Double, val track: List<GeoPoint>)
 
 class ActivityRepository(
     private val client: GitHubClient,
@@ -76,6 +85,65 @@ class ActivityRepository(
         }
     }
 
+    fun missingTrackIndexCount() = dao.missingTrackIndexCount()
+
+    /**
+     * Track-Index fuer die Umkreissuche aufbauen: fuer jede Aktivitaet ohne Index die GPX laden,
+     * stark vereinfachen (100 m, bei Touren ueber 50 km 1 km) und nur Bounding-Box + Kurzform
+     * speichern. Indoor-Touren und Aktivitaeten ohne GPS bekommen "" (nicht durchsuchbar).
+     */
+    suspend fun buildTrackIndex(onProgress: (done: Int, total: Int) -> Unit) {
+        val todo = dao.missingTrackIndex()
+        if (todo.isEmpty()) return
+        val semaphore = Semaphore(4)
+        val done = AtomicInteger(0)
+        coroutineScope {
+            todo.map { a ->
+                async {
+                    semaphore.withPermit {
+                        try {
+                            indexOne(a.id, a.typeKey, a.name, a.distanceM)
+                        } catch (e: IOException) {
+                            // bleibt null und wird beim naechsten Mal erneut versucht
+                        }
+                        onProgress(done.incrementAndGet(), todo.size)
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    private suspend fun indexOne(id: Long, typeKey: String, name: String, distanceM: Double) {
+        if (isIndoor(typeKey, name)) {
+            dao.updateTrackIndex(id, null, null, null, null, "")
+            return
+        }
+        val gpx = client.fetchGpx(id)
+        val tolerance = if (distanceM > 50_000) INDEX_TOLERANCE_LONG_M else INDEX_TOLERANCE_M
+        val points = if (gpx == null) emptyList() else withContext(Dispatchers.Default) {
+            try {
+                simplify(GpxParser.parse(gpx), tolerance)
+            } catch (e: XmlPullParserException) {
+                emptyList() // defekte Datei: als "kein Track" markieren
+            }
+        }
+        val box = boundingBox(points)
+        dao.updateTrackIndex(id, box?.minLat, box?.maxLat, box?.minLon, box?.maxLon, encodePolyline(points))
+    }
+
+    /** Alle Touren, deren Track naeher als radiusM am Suchpunkt vorbeifuehrt, naechste zuerst. */
+    suspend fun nearby(center: GeoPoint, radiusM: Double): List<NearbyHit> {
+        val box = boxAround(center, radiusM)
+        val candidates = dao.tracksInBox(box.minLat, box.maxLat, box.minLon, box.maxLon)
+        return withContext(Dispatchers.Default) {
+            candidates.mapNotNull { row ->
+                val track = decodePolyline(row.trackSimplified)
+                val d = distanceToTrackM(center, track)
+                if (d <= radiusM) NearbyHit(row.id, d, track) else null
+            }.sortedBy { it.distanceM }
+        }
+    }
+
     /** Liest ids.txt, laedt nur fehlende Aktivitaeten. */
     suspend fun sync(
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
@@ -113,5 +181,7 @@ class ActivityRepository(
         const val POLL_INTERVAL_MS = 4_000L
         const val MAX_POLLS = 75          // ca. 5 Minuten
         const val TRACK_TOLERANCE_M = 5.0 // Vereinfachung: max. Abweichung vom Original
+        const val INDEX_TOLERANCE_M = 100.0       // Track-Index fuer die Umkreissuche
+        const val INDEX_TOLERANCE_LONG_M = 1000.0 // ... bei Touren ueber 50 km
     }
 }

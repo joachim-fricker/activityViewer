@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -18,11 +19,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import de.jfricker.activityviewer.ui.ActivitiesScreen
 import de.jfricker.activityviewer.ui.MainViewModel
+import de.jfricker.activityviewer.ui.NearbyScreen
 import de.jfricker.activityviewer.ui.StatsScreen
 import de.jfricker.activityviewer.ui.SyncScreen
 import de.jfricker.activityviewer.ui.WorldMapScreen
@@ -33,7 +36,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val app = application as ActivityViewerApp
-                MainViewModel(app.repository, app.tokenStore, app.locationProvider)
+                MainViewModel(app.repository, app.tokenStore, app.locationProvider, app.networkInfo)
             }
         }
     }
@@ -50,22 +53,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppContent(vm: MainViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val overview by vm.overview.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        PrimaryTabRow(selectedTabIndex = tab) {
+        PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Statistik") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Aktivitäten") })
             Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Karte") })
-            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Sync") })
+            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("In der Nähe") })
+            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview)
             1 -> ActivitiesScreen(vm)
             2 -> WorldMapScreen(vm)
+            3 -> NearbyScreen(vm)
             else -> SyncScreen(vm)
         }
     }

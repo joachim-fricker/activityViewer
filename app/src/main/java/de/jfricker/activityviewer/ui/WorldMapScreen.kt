@@ -503,7 +503,7 @@ private fun handleTap(
 // ---------------------------------------------------------------- Overlays
 
 @Composable
-private fun TypeDot(typeKey: String) {
+internal fun TypeDot(typeKey: String) {
     Box(
         Modifier
             .size(10.dp)

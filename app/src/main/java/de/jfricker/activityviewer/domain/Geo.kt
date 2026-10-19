@@ -13,7 +13,7 @@ data class GeoPoint(val lat: Double, val lon: Double)
 data class BBox(val minLat: Double, val maxLat: Double, val minLon: Double, val maxLon: Double)
 
 private const val EARTH_RADIUS_M = 6_371_000.0
-private const val M_PER_DEG = 111_320.0
+private const val M_PER_DEG = 111_194.93 // 2*PI*R/360: Meter pro Breitengrad
 
 /** Grosskreis-Distanz in Metern (Haversine). */
 fun distanceM(a: GeoPoint, b: GeoPoint): Double {
@@ -151,4 +151,21 @@ fun decodePolyline(encoded: String): List<GeoPoint> {
         out.add(GeoPoint(lat / 1e5, lon / 1e5))
     }
     return out
+}
+
+/** Kreis um c mit Radius radiusM als geschlossener Linienzug (fuer die Kartendarstellung). */
+fun circlePolygon(c: GeoPoint, radiusM: Double, segments: Int = 64): List<GeoPoint> {
+    val dLat = radiusM / M_PER_DEG
+    val dLon = radiusM / (M_PER_DEG * cos(Math.toRadians(c.lat)))
+    return (0..segments).map { i ->
+        val a = 2 * Math.PI * i / segments
+        GeoPoint(c.lat + dLat * cos(a), c.lon + dLon * sin(a))
+    }
+}
+
+/** Bounding-Box um c, die einen Kreis mit radiusM sicher enthaelt (Vorfilter fuer die DB). */
+fun boxAround(c: GeoPoint, radiusM: Double): BBox {
+    val dLat = radiusM / M_PER_DEG
+    val dLon = radiusM / (M_PER_DEG * cos(Math.toRadians(c.lat)))
+    return BBox(c.lat - dLat, c.lat + dLat, c.lon - dLon, c.lon + dLon)
 }

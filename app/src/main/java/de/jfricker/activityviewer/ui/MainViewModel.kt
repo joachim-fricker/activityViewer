@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.jfricker.activityviewer.data.ActivityRepository
 import de.jfricker.activityviewer.data.LocationProvider
+import de.jfricker.activityviewer.data.NearbyHit
+import de.jfricker.activityviewer.data.NetworkInfo
 import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
@@ -55,7 +57,8 @@ sealed interface TrackState {
 class MainViewModel(
     private val repo: ActivityRepository,
     private val tokenStore: TokenStore,
-    private val location: LocationProvider
+    private val location: LocationProvider,
+    private val network: NetworkInfo
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -147,10 +150,40 @@ class MainViewModel(
         bulkJob?.cancel()
     }
 
+    // ---------------------------------------------------------------- Umkreissuche
+
+    /** Anzahl Aktivitaeten ohne Track-Index (noch nicht durchsuchbar). */
+    val missingTrackIndex: StateFlow<Int> =
+        repo.missingTrackIndexCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Fortschritt beim Aufbau des Track-Index (fertig, gesamt); null = laeuft nicht. */
+    private val _indexProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val indexProgress: StateFlow<Pair<Int, Int>?> = _indexProgress.asStateFlow()
+    private var indexJob: Job? = null
+
+    /**
+     * Laedt fehlende Tracks fuer die Umkreissuche. Automatisch nur im WLAN,
+     * mit force = true auch im Mobilnetz.
+     */
+    fun buildTrackIndex(force: Boolean = false) {
+        if (indexJob?.isActive == true) return
+        if (!force && !network.isUnmetered()) return
+        indexJob = viewModelScope.launch {
+            try {
+                repo.buildTrackIndex { done, total -> _indexProgress.value = done to total }
+            } catch (e: IOException) {
+                // z. B. Netz weg; fehlende Tracks werden beim naechsten Mal nachgeladen
+            } finally {
+                _indexProgress.value = null
+            }
+        }
+    }
+
+    suspend fun nearby(center: GeoPoint, radiusM: Double): List<NearbyHit> =
+        repo.nearby(center, radiusM)
+
     fun myLocation(): Flow<GeoPoint?> = location.updates()
 
-    // Beim App-Start nur der interne Sync, der Garmin-Workflow laeuft nur auf Knopfdruck.
-    init { sync(withGarmin = false) }
 
     fun syncInternalOnly() = sync(withGarmin = false)
 
@@ -200,6 +233,12 @@ class MainViewModel(
             } catch (e: IOException) {
                 SyncState.Error(e.message ?: "Netzwerkfehler")
             }
+            // Danach Tracks neuer Aktivitaeten fuer die Umkreissuche nachladen (nur im WLAN)
+            buildTrackIndex()
         }
     }
+
+    // Am Klassenende, damit alle Felder oben bereits initialisiert sind.
+    // Beim App-Start nur der interne Sync, der Garmin-Workflow laeuft nur auf Knopfdruck.
+    init { sync(withGarmin = false) }
 }

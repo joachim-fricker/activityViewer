@@ -39,6 +39,48 @@ interface ActivityDao {
     )
     fun activityRows(): Flow<List<ActivityRow>>
 
+    // ---- Track-Index fuer die Umkreissuche
+    // trackSimplified: null = noch nicht geladen, "" = kein GPS-Track / Indoor
+
+    @Query("SELECT id, typeKey, name, distanceM FROM activity WHERE trackSimplified IS NULL")
+    suspend fun missingTrackIndex(): List<TrackIndexTodo>
+
+    @Query("SELECT COUNT(*) FROM activity WHERE trackSimplified IS NULL")
+    fun missingTrackIndexCount(): Flow<Int>
+
+    @Query(
+        """
+        UPDATE activity
+        SET minLat = :minLat, maxLat = :maxLat, minLon = :minLon, maxLon = :maxLon,
+            trackSimplified = :track
+        WHERE id = :id
+        """
+    )
+    suspend fun updateTrackIndex(
+        id: Long,
+        minLat: Double?,
+        maxLat: Double?,
+        minLon: Double?,
+        maxLon: Double?,
+        track: String
+    )
+
+    /** Tracks, deren Bounding-Box die Such-Box schneidet (Vorfilter). */
+    @Query(
+        """
+        SELECT id, trackSimplified FROM activity
+        WHERE trackSimplified IS NOT NULL AND trackSimplified != ''
+          AND maxLat >= :minLat AND minLat <= :maxLat
+          AND maxLon >= :minLon AND minLon <= :maxLon
+        """
+    )
+    suspend fun tracksInBox(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ): List<TrackIndexRow>
+
     @Query("SELECT * FROM activity WHERE id = :id")
     fun activity(id: Long): Flow<ActivityEntity?>
 }
