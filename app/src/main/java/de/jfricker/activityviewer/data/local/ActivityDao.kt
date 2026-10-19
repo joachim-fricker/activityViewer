@@ -32,32 +32,12 @@ interface ActivityDao {
 
     @Query(
         """
-        SELECT id, name, typeKey, startTime, distanceM, durationS, elevationGain, locationName
+        SELECT id, name, typeKey, startTime, distanceM, durationS, elevationGain, locationName,
+               startLat, startLon
         FROM activity
         """
     )
     fun activityRows(): Flow<List<ActivityRow>>
-
-    /** null = Track noch nicht geladen, "" = Aktivitaet hat keinen GPS-Track. */
-    @Query("SELECT trackSimplified FROM activity WHERE id = :id")
-    suspend fun trackOf(id: Long): String?
-
-    @Query(
-        """
-        UPDATE activity
-        SET minLat = :minLat, maxLat = :maxLat, minLon = :minLon, maxLon = :maxLon,
-            trackSimplified = :track
-        WHERE id = :id
-        """
-    )
-    suspend fun updateTrack(
-        id: Long,
-        minLat: Double?,
-        maxLat: Double?,
-        minLon: Double?,
-        maxLon: Double?,
-        track: String
-    )
 
     @Query("SELECT * FROM activity WHERE id = :id")
     fun activity(id: Long): Flow<ActivityEntity?>

@@ -1,9 +1,6 @@
 package de.jfricker.activityviewer.ui
 
-import android.Manifest
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -55,7 +52,6 @@ import de.jfricker.activityviewer.domain.CYCLING_TYPES
 import de.jfricker.activityviewer.domain.HIKING_TYPES
 import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.typeLabel
-import kotlinx.coroutines.flow.flowOf
 import java.text.Collator
 import java.text.NumberFormat
 import java.util.Locale
@@ -81,9 +77,9 @@ private val DATE_W = 66.dp
 private val NUM_W = 52.dp
 private val TIME_W = 46.dp
 
-private val LOCALE = Locale.forLanguageTag("de-CH")
+internal val LOCALE = Locale.forLanguageTag("de-CH")
 
-private fun km1() = NumberFormat.getNumberInstance(LOCALE).apply {
+internal fun km1() = NumberFormat.getNumberInstance(LOCALE).apply {
     minimumFractionDigits = 1
     maximumFractionDigits = 1
 }
@@ -291,7 +287,7 @@ private fun Cell(text: String, width: Dp, align: TextAlign) {
 // ---------------------------------------------------------------- Detail
 
 @Composable
-private fun ActivityDetailScreen(
+internal fun ActivityDetailScreen(
     vm: MainViewModel,
     id: Long,
     onBack: () -> Unit,
@@ -333,9 +329,6 @@ private fun ActivityDetailScreen(
     }
 }
 
-/** Nur einmal pro App-Start nach der Standort-Berechtigung fragen. */
-private var locationPermissionAsked = false
-
 @Composable
 private fun TrackSection(
     vm: MainViewModel,
@@ -348,25 +341,7 @@ private fun TrackSection(
     val trackFlow = remember(id, retry) { vm.track(id) }
     val state by trackFlow.collectAsStateWithLifecycle(initialValue = TrackState.Loading)
 
-    var hasPermission by remember { mutableStateOf(vm.hasLocationPermission()) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result -> hasPermission = result.values.any { it } }
-    LaunchedEffect(Unit) {
-        if (!hasPermission && !locationPermissionAsked) {
-            locationPermissionAsked = true
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-        }
-    }
-    val locationFlow = remember(hasPermission) {
-        if (hasPermission) vm.myLocation() else flowOf(null)
-    }
-    val me by locationFlow.collectAsStateWithLifecycle(initialValue = null)
+    val me = rememberMyLocation(vm)
 
     when (val s = state) {
         is TrackState.Loading -> Box(mapModifier, contentAlignment = Alignment.Center) {
@@ -479,16 +454,16 @@ private fun DetailLine(label: String, value: String) {
 // ---------------------------------------------------------------- Formatierung
 // startTime kommt von Garmin als "yyyy-MM-dd HH:mm:ss" (lokale Zeit)
 
-private fun shortDate(s: String): String =
+internal fun shortDate(s: String): String =
     if (s.length >= 10) "${s.substring(8, 10)}.${s.substring(5, 7)}.${s.substring(2, 4)}" else s
 
-private fun longDate(s: String): String =
+internal fun longDate(s: String): String =
     if (s.length >= 10) "${s.substring(8, 10)}.${s.substring(5, 7)}.${s.substring(0, 4)}" else s
 
 private fun timeOfDay(s: String): String =
     if (s.length >= 16) s.substring(11, 16) else ""
 
-private fun formatDuration(seconds: Double, withSeconds: Boolean = false): String {
+internal fun formatDuration(seconds: Double, withSeconds: Boolean = false): String {
     val t = seconds.roundToLong()
     val h = t / 3600
     val m = (t % 3600) / 60

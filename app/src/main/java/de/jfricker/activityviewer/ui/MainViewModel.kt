@@ -12,6 +12,8 @@ import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.buildOverview
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,8 +22,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import org.maplibre.android.camera.CameraPosition
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 
 sealed interface SyncState {
     data object Idle : SyncState
@@ -83,6 +90,62 @@ class MainViewModel(
     }
 
     fun hasLocationPermission(): Boolean = location.hasPermission()
+
+    /** Kameraposition der Weltkarte, damit sie beim Tab-Wechsel erhalten bleibt. */
+    var worldCamera: CameraPosition? = null
+
+    /** In der Weltkarte geoeffnete Tracks (bleiben sichtbar, z. B. fuer Mehrtagestouren). */
+    private val _worldTracks = MutableStateFlow<Map<Long, List<GeoPoint>>>(emptyMap())
+    val worldTracks: StateFlow<Map<Long, List<GeoPoint>>> = _worldTracks.asStateFlow()
+
+    fun addWorldTrack(id: Long, points: List<GeoPoint>) {
+        _worldTracks.update { it + (id to points) }
+    }
+
+    fun clearWorldTracks() {
+        bulkJob?.cancel()
+        _worldTracks.value = emptyMap()
+    }
+
+    /** Fortschritt beim Oeffnen mehrerer Tracks (fertig, gesamt); null = nichts laeuft. */
+    private val _bulkProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val bulkProgress: StateFlow<Pair<Int, Int>?> = _bulkProgress.asStateFlow()
+    private var bulkJob: Job? = null
+
+    /** Laedt die Tracks aller uebergebenen Aktivitaeten (max. 4 gleichzeitig). */
+    fun openWorldTracks(ids: List<Long>) {
+        if (bulkJob?.isActive == true) return
+        val todo = ids.filter { it !in _worldTracks.value }
+        if (todo.isEmpty()) return
+        bulkJob = viewModelScope.launch {
+            val semaphore = Semaphore(4)
+            val done = AtomicInteger(0)
+            _bulkProgress.value = 0 to todo.size
+            try {
+                coroutineScope {
+                    todo.forEach { id ->
+                        launch {
+                            semaphore.withPermit {
+                                try {
+                                    val points = repo.track(id)
+                                    if (points.isNotEmpty()) addWorldTrack(id, points)
+                                } catch (e: IOException) {
+                                    // einzelne Fehler ignorieren, Rest weiter laden
+                                }
+                                _bulkProgress.value = done.incrementAndGet() to todo.size
+                            }
+                        }
+                    }
+                }
+            } finally {
+                _bulkProgress.value = null
+            }
+        }
+    }
+
+    fun cancelOpenWorldTracks() {
+        bulkJob?.cancel()
+    }
 
     fun myLocation(): Flow<GeoPoint?> = location.updates()
 

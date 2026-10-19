@@ -4,9 +4,6 @@ import de.jfricker.activityviewer.data.local.ActivityDao
 import de.jfricker.activityviewer.data.remote.GitHubClient
 import de.jfricker.activityviewer.data.remote.GpxParser
 import de.jfricker.activityviewer.domain.GeoPoint
-import de.jfricker.activityviewer.domain.boundingBox
-import de.jfricker.activityviewer.domain.decodePolyline
-import de.jfricker.activityviewer.domain.encodePolyline
 import de.jfricker.activityviewer.domain.simplify
 import de.jfricker.activityviewer.data.remote.WorkflowClient
 import de.jfricker.activityviewer.data.remote.WorkflowRun
@@ -39,24 +36,18 @@ class ActivityRepository(
     fun activity(id: Long) = dao.activity(id)
 
     /**
-     * Liefert den vereinfachten Track einer Aktivitaet. Beim ersten Aufruf wird die GPX
-     * von GitHub geladen, vereinfacht und zusammen mit der Bounding-Box in der DB gespeichert
-     * (Grundlage fuer die spaetere Umkreissuche). Leere Liste = kein GPS-Track vorhanden.
+     * Laedt die GPX einer Aktivitaet von GitHub und liefert den vereinfachten Track
+     * (nur fuer die Anzeige, wird nicht gespeichert). Leere Liste = kein GPS-Track vorhanden.
      */
     suspend fun track(id: Long): List<GeoPoint> {
-        dao.trackOf(id)?.let { return decodePolyline(it) }
-
-        val gpx = client.fetchGpx(id)
-        val points = if (gpx == null) emptyList() else withContext(Dispatchers.Default) {
+        val gpx = client.fetchGpx(id) ?: return emptyList()
+        return withContext(Dispatchers.Default) {
             try {
                 simplify(GpxParser.parse(gpx), TRACK_TOLERANCE_M)
             } catch (e: XmlPullParserException) {
                 throw IOException("GPX-Datei nicht lesbar", e)
             }
         }
-        val box = boundingBox(points)
-        dao.updateTrack(id, box?.minLat, box?.maxLat, box?.minLon, box?.maxLon, encodePolyline(points))
-        return points
     }
 
     /**

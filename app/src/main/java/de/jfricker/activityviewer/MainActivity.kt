@@ -25,6 +25,7 @@ import de.jfricker.activityviewer.ui.ActivitiesScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.StatsScreen
 import de.jfricker.activityviewer.ui.SyncScreen
+import de.jfricker.activityviewer.ui.WorldMapScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -58,11 +59,13 @@ fun AppContent(vm: MainViewModel) {
         PrimaryTabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Statistik") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Aktivitäten") })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Sync") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Karte") })
+            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview)
             1 -> ActivitiesScreen(vm)
+            2 -> WorldMapScreen(vm)
             else -> SyncScreen(vm)
         }
     }
