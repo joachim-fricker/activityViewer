@@ -13,6 +13,9 @@ import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.HeatTrack
+import de.jfricker.activityviewer.domain.RouteGroup
+import de.jfricker.activityviewer.domain.RouteInput
+import de.jfricker.activityviewer.domain.findRepeatedRoutes
 import de.jfricker.activityviewer.domain.decodePolyline
 import de.jfricker.activityviewer.domain.SKI_SEASON_START_MONTH
 import de.jfricker.activityviewer.domain.SKI_TYPES
@@ -29,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -219,6 +223,21 @@ class MainViewModel(
         repo.heatTrackRows()
             .conflate()
             .map { rows -> rows.map { HeatTrack(it.id, it.typeKey, decodePolyline(it.trackSimplified)) } }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Mehrfach gemachte Strecken; null = Tracks noch nicht geladen. */
+    val repeatedRoutes: StateFlow<List<RouteGroup>?> =
+        combine(heatTracks, activities) { tracks, rows ->
+            if (tracks == null) return@combine null
+            val byId = rows.associateBy { it.id }
+            findRepeatedRoutes(
+                tracks.mapNotNull { t ->
+                    byId[t.id]?.let { RouteInput(t.id, t.typeKey, it.distanceM, it.startTime, t.points) }
+                }
+            )
+        }
+            .conflate()
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
