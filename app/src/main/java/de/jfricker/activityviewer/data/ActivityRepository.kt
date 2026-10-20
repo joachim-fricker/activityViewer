@@ -3,7 +3,12 @@ package de.jfricker.activityviewer.data
 import de.jfricker.activityviewer.data.local.ActivityDao
 import de.jfricker.activityviewer.data.remote.GitHubClient
 import de.jfricker.activityviewer.data.remote.GpxParser
+import de.jfricker.activityviewer.domain.CYCLING_TYPES
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.NO_DEVICE
+import de.jfricker.activityviewer.domain.NO_EFFORT
+import de.jfricker.activityviewer.domain.bestPowers
+import de.jfricker.activityviewer.domain.bestEfforts
 import de.jfricker.activityviewer.domain.boundingBox
 import de.jfricker.activityviewer.domain.boxAround
 import de.jfricker.activityviewer.domain.decodePolyline
@@ -92,6 +97,75 @@ class ActivityRepository(
 
     fun heatTrackRows() = dao.heatTracks()
 
+    fun recordRows() = dao.recordRows()
+
+    /** deviceId fuer bereits importierte Radtouren nachladen (nur das kleine JSON). */
+    suspend fun backfillDeviceIds() {
+        val todo = dao.missingDeviceIds(CYCLING_TYPES)
+        if (todo.isEmpty()) return
+        val semaphore = Semaphore(8)
+        coroutineScope {
+            todo.map { id ->
+                async {
+                    semaphore.withPermit {
+                        try {
+                            dao.updateDeviceId(id, client.fetchActivity(id).deviceId ?: NO_DEVICE)
+                        } catch (e: IOException) {
+                            // naechstes Mal erneut
+                        } catch (e: SerializationException) {
+                            dao.updateDeviceId(id, NO_DEVICE)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    fun missingBestEffortsCount() = dao.missingBestEffortsCount(CYCLING_TYPES)
+
+    /**
+     * Bestzeiten 5/10/20 km fuer alle Radtouren, die noch keine haben: GPX laden (mit Zeiten),
+     * berechnen, nur die drei Zahlen speichern. Indoor-Fahrten bekommen -1.
+     */
+    suspend fun buildBestEfforts(onProgress: (done: Int, total: Int) -> Unit) {
+        val todo = dao.missingBestEfforts(CYCLING_TYPES)
+        if (todo.isEmpty()) return
+        val semaphore = Semaphore(4)
+        val done = AtomicInteger(0)
+        coroutineScope {
+            todo.map { a ->
+                async {
+                    semaphore.withPermit {
+                        try {
+                            if (isIndoor(a.typeKey, a.name)) {
+                                storeBestEfforts(a.id, a.typeKey, null)
+                            } else {
+                                val gpx = client.fetchGpx(a.id)
+                                storeBestEfforts(a.id, a.typeKey, gpx)
+                            }
+                        } catch (e: IOException) {
+                            // bleibt null und wird beim naechsten Mal erneut versucht
+                        }
+                        onProgress(done.incrementAndGet(), todo.size)
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    /** Bestzeiten (5/10/20/40 km) und geschaetzte Leistung am Berg (5/10/20 min); gpx = null => alles n/a. */
+    private suspend fun storeBestEfforts(id: Long, typeKey: String, gpx: String?) {
+        val (e, p) = withContext(Dispatchers.Default) {
+            val points = try {
+                if (gpx == null) emptyList() else GpxParser.parseTimed(gpx)
+            } catch (ex: XmlPullParserException) {
+                emptyList()
+            }
+            bestEfforts(points) to bestPowers(points, typeKey)
+        }
+        dao.updateBestEfforts(id, e[0], e[1], e[2], e[3], p[0], p[1], p[2])
+    }
+
     /**
      * Track-Index fuer die Umkreissuche aufbauen: fuer jede Aktivitaet ohne Index die GPX laden,
      * stark vereinfachen (100 m, bei Touren ueber 50 km 1 km) und nur Bounding-Box + Kurzform
@@ -124,6 +198,8 @@ class ActivityRepository(
             return
         }
         val gpx = client.fetchGpx(id)
+        // Radtouren: Bestzeiten gleich mitberechnen, dann muss die GPX nicht nochmals geladen werden
+        if (typeKey in CYCLING_TYPES) storeBestEfforts(id, typeKey, gpx)
         val tolerance = if (distanceM > 50_000) INDEX_TOLERANCE_LONG_M else INDEX_TOLERANCE_M
         val points = if (gpx == null) emptyList() else withContext(Dispatchers.Default) {
             try {

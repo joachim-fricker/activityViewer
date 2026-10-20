@@ -28,6 +28,7 @@ import de.jfricker.activityviewer.ui.CalendarScreen
 import de.jfricker.activityviewer.ui.HeatmapScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.NearbyScreen
+import de.jfricker.activityviewer.ui.RecordsScreen
 import de.jfricker.activityviewer.ui.RoutesScreen
 import de.jfricker.activityviewer.ui.StatsScreen
 import de.jfricker.activityviewer.ui.SyncScreen
@@ -72,8 +73,9 @@ fun AppContent(vm: MainViewModel) {
             Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Karte") })
             Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Heatmap") })
             Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Strecken") })
-            Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("In der Nähe") })
-            Tab(selected = tab == 7, onClick = { tab = 7 }, text = { Text("Sync") })
+            Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Rekorde") })
+            Tab(selected = tab == 7, onClick = { tab = 7 }, text = { Text("In der Nähe") })
+            Tab(selected = tab == 8, onClick = { tab = 8 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
@@ -82,7 +84,8 @@ fun AppContent(vm: MainViewModel) {
             3 -> WorldMapScreen(vm)
             4 -> HeatmapScreen(vm)
             5 -> RoutesScreen(vm)
-            6 -> NearbyScreen(vm)
+            6 -> RecordsScreen(vm)
+            7 -> NearbyScreen(vm)
             else -> SyncScreen(vm)
         }
     }

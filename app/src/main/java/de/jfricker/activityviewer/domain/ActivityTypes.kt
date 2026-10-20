@@ -25,3 +25,32 @@ private val INDOOR_TYPES = setOf("virtual_ride", "indoor_cycling")
  */
 fun isIndoor(typeKey: String, name: String): Boolean =
     typeKey in INDOOR_TYPES || name.contains("rouvy", ignoreCase = true)
+
+/** Wandern (ohne Laufen): hier interessiert keine Geschwindigkeit. */
+private val NO_SPEED_TYPES = setOf("walking", "hiking", "mountaineering")
+
+fun showsSpeed(typeKey: String): Boolean = typeKey !in NO_SPEED_TYPES
+
+/** deviceId = 0: Geraet im Garmin-JSON nicht angegeben. */
+const val NO_DEVICE = 0L
+
+/** Die Uhr: ihre Max. Geschwindigkeit beim Radfahren ist unzuverlaessig (GPS-Spruenge). */
+const val WATCH_DEVICE_ID = 3390593036L
+
+/** Mehr ist bei keiner Aktivitaet realistisch, das ist ein GPS-Sprung. */
+private const val MAX_PLAUSIBLE_SPEED_MS = 100.0 / 3.6
+
+/**
+ * Max. Geschwindigkeit, wenn sie glaubwuerdig ist, sonst null.
+ * - Werte ueber 100 km/h werden immer verworfen.
+ * - Radfahren: nur wenn das Geraet bekannt ist und nicht die Uhr (also Edge).
+ *   Noch nicht nachgeladen (null) oder im JSON nicht angegeben (0) => nicht anzeigen.
+ */
+fun trustedMaxSpeed(typeKey: String, maxSpeed: Double?, deviceId: Long?): Double? {
+    val v = maxSpeed?.takeIf { it > 0 } ?: return null
+    if (v > MAX_PLAUSIBLE_SPEED_MS) return null
+    if (typeKey in CYCLING_TYPES) {
+        if (deviceId == null || deviceId == NO_DEVICE || deviceId == WATCH_DEVICE_ID) return null
+    }
+    return v
+}

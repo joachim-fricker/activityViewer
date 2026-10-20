@@ -33,5 +33,16 @@ data class ActivityEntity(
     val maxLat: Double? = null,
     val minLon: Double? = null,
     val maxLon: Double? = null,
-    val trackSimplified: String? = null
+    val trackSimplified: String? = null,
+    // Bestzeiten Rad in Sekunden aus der GPX; null = noch nicht berechnet, -1 = nicht verfuegbar
+    val best5kS: Double? = null,
+    val best10kS: Double? = null,
+    val best20kS: Double? = null,
+    val best40kS: Double? = null,
+    // geschaetzte beste Leistung am Berg in Watt (5/10/20 min); null = noch nicht berechnet, -1 = n/a
+    val bestP5mW: Double? = null,
+    val bestP10mW: Double? = null,
+    val bestP20mW: Double? = null,
+    // Aufzeichnungsgeraet aus dem Garmin-JSON; null = noch nicht nachgeladen, 0 = unbekannt
+    val deviceId: Long? = null
 )

@@ -10,6 +10,7 @@ import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
+import de.jfricker.activityviewer.data.local.RecordRow
 import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.HeatTrack
@@ -241,6 +242,35 @@ class MainViewModel(
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    // ---------------------------------------------------------------- Rekorde
+
+    val records: StateFlow<List<RecordRow>> =
+        repo.recordRows().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Radtouren ohne berechnete Bestzeiten (5/10/20 km). */
+    val missingBestEfforts: StateFlow<Int> =
+        repo.missingBestEffortsCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    private val _effortProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val effortProgress: StateFlow<Pair<Int, Int>?> = _effortProgress.asStateFlow()
+    private var effortJob: Job? = null
+
+    /** Bestzeiten nachrechnen (GPX laden). Automatisch nur im WLAN, mit force auch mobil. */
+    fun buildBestEfforts(force: Boolean = false) {
+        if (effortJob?.isActive == true) return
+        if (!force && !network.isUnmetered()) return
+        effortJob = viewModelScope.launch {
+            try {
+                repo.backfillDeviceIds()
+                repo.buildBestEfforts { done, total -> _effortProgress.value = done to total }
+            } catch (e: IOException) {
+                // naechstes Mal erneut
+            } finally {
+                _effortProgress.value = null
+            }
+        }
+    }
+
     suspend fun nearby(center: GeoPoint, radiusM: Double): List<NearbyHit> =
         repo.nearby(center, radiusM)
 
@@ -294,6 +324,12 @@ class MainViewModel(
                 SyncState.Finished(result, warning)
             } catch (e: IOException) {
                 SyncState.Error(e.message ?: "Netzwerkfehler")
+            }
+            // Geraet (deviceId) bestehender Radtouren nachladen - nur kleine JSONs, auch mobil
+            try {
+                repo.backfillDeviceIds()
+            } catch (e: IOException) {
+                // naechstes Mal erneut
             }
             // Danach Tracks neuer Aktivitaeten fuer die Umkreissuche nachladen (nur im WLAN)
             buildTrackIndex()

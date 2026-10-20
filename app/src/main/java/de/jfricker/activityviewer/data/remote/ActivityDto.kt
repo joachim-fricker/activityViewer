@@ -1,6 +1,7 @@
 package de.jfricker.activityviewer.data.remote
 
 import de.jfricker.activityviewer.data.local.ActivityEntity
+import de.jfricker.activityviewer.domain.NO_DEVICE
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -25,7 +26,8 @@ data class ActivityDto(
     val averageHR: Double? = null,
     val calories: Double? = null,
     val minElevation: Double? = null,
-    val maxElevation: Double? = null
+    val maxElevation: Double? = null,
+    val deviceId: Long? = null
 ) {
     fun toEntity() = ActivityEntity(
         id = activityId,
@@ -46,6 +48,7 @@ data class ActivityDto(
         avgHr = averageHR,
         calories = calories,
         minElev = minElevation,
-        maxElev = maxElevation
+        maxElev = maxElevation,
+        deviceId = deviceId ?: NO_DEVICE
     )
 }

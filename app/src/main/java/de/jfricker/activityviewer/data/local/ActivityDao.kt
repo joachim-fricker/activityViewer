@@ -123,6 +123,49 @@ interface ActivityDao {
     )
     fun heatTracks(): Flow<List<HeatTrackRow>>
 
+    // ---- Rekorde / Bestzeiten Rad
+
+    @Query(
+        """
+        SELECT id, name, typeKey, startTime, distanceM, durationS, elevationGain, maxElev, maxSpeed,
+               best5kS, best10kS, best20kS, best40kS, bestP5mW, bestP10mW, bestP20mW, deviceId
+        FROM activity
+        """
+    )
+    fun recordRows(): Flow<List<RecordRow>>
+
+    @Query("SELECT id, typeKey, name FROM activity WHERE typeKey IN (:types) AND bestP5mW IS NULL")
+    suspend fun missingBestEfforts(types: List<String>): List<BestEffortTodo>
+
+    @Query("SELECT COUNT(*) FROM activity WHERE typeKey IN (:types) AND bestP5mW IS NULL")
+    fun missingBestEffortsCount(types: List<String>): Flow<Int>
+
+    @Query(
+        """
+        UPDATE activity
+        SET best5kS = :b5, best10kS = :b10, best20kS = :b20, best40kS = :b40,
+            bestP5mW = :p10, bestP10mW = :p20, bestP20mW = :p30
+        WHERE id = :id
+        """
+    )
+    suspend fun updateBestEfforts(
+        id: Long,
+        b5: Double,
+        b10: Double,
+        b20: Double,
+        b40: Double,
+        p10: Double,
+        p20: Double,
+        p30: Double
+    )
+
+    /** Radtouren, deren Aufzeichnungsgeraet noch nicht bekannt ist. */
+    @Query("SELECT id FROM activity WHERE typeKey IN (:types) AND deviceId IS NULL")
+    suspend fun missingDeviceIds(types: List<String>): List<Long>
+
+    @Query("UPDATE activity SET deviceId = :deviceId WHERE id = :id")
+    suspend fun updateDeviceId(id: Long, deviceId: Long)
+
     @Query("SELECT * FROM activity WHERE id = :id")
     fun activity(id: Long): Flow<ActivityEntity?>
 }

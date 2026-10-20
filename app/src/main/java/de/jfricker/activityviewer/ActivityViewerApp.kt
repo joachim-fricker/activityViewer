@@ -7,6 +7,12 @@ import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.NetworkInfo
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.AppDatabase
+import de.jfricker.activityviewer.data.local.MIGRATION_2_3
+import de.jfricker.activityviewer.data.local.MIGRATION_3_4
+import de.jfricker.activityviewer.data.local.MIGRATION_4_5
+import de.jfricker.activityviewer.data.local.MIGRATION_5_6
+import de.jfricker.activityviewer.data.local.MIGRATION_6_7
+import de.jfricker.activityviewer.data.local.MIGRATION_7_8
 import de.jfricker.activityviewer.data.remote.GitHubClient
 import de.jfricker.activityviewer.data.remote.WorkflowClient
 import org.maplibre.android.MapLibre
@@ -19,6 +25,7 @@ class ActivityViewerApp : Application() {
 
     private val database by lazy {
         Room.databaseBuilder(this, AppDatabase::class.java, "activities.db")
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigration(true) // nur waehrend der Entwicklung
             .build()
     }

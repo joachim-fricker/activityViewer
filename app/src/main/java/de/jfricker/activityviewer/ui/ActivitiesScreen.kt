@@ -51,6 +51,8 @@ import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.CYCLING_TYPES
 import de.jfricker.activityviewer.domain.HIKING_TYPES
 import de.jfricker.activityviewer.domain.SKI_TYPES
+import de.jfricker.activityviewer.domain.showsSpeed
+import de.jfricker.activityviewer.domain.trustedMaxSpeed
 import de.jfricker.activityviewer.domain.typeLabel
 import java.text.Collator
 import java.text.NumberFormat
@@ -403,20 +405,47 @@ private fun ActivityDetails(a: ActivityEntity, fmtKm: NumberFormat, fmtInt: Numb
         Text("Details", style = MaterialTheme.typography.titleMedium)
 
         DetailLine("Dauer", formatDuration(a.durationS, withSeconds = true))
-        a.avgSpeed?.takeIf { it > 0 }?.let { mps ->
-            DetailLine("Ø Geschwindigkeit", "${fmtKm.format(mps * 3.6)} km/h")
-            if (a.typeKey == "running" || a.typeKey == "walking") {
-                DetailLine("Ø Pace", "${formatPace(1000.0 / mps)} /km")
+        if (showsSpeed(a.typeKey)) {
+            a.avgSpeed?.takeIf { it > 0 }?.let { mps ->
+                DetailLine("Ø Geschwindigkeit", "${fmtKm.format(mps * 3.6)} km/h")
+                if (a.typeKey == "running") {
+                    DetailLine("Ø Pace", "${formatPace(1000.0 / mps)} /km")
+                }
             }
-        }
-        a.maxSpeed?.takeIf { it > 0 }?.let { mps ->
-            DetailLine("Max. Geschwindigkeit", "${fmtKm.format(mps * 3.6)} km/h")
+            trustedMaxSpeed(a.typeKey, a.maxSpeed, a.deviceId)?.let { mps ->
+                DetailLine("Max. Geschwindigkeit", "${fmtKm.format(mps * 3.6)} km/h")
+            }
         }
         a.minElev?.let { DetailLine("Tiefster Punkt", "${fmtInt.format(it)} m") }
         a.maxElev?.let { DetailLine("Höchster Punkt", "${fmtInt.format(it)} m") }
         a.avgHr?.let { DetailLine("Ø Puls", "${fmtInt.format(it)} bpm") }
         a.calories?.let { DetailLine("Kalorien", "${fmtInt.format(it)} kcal") }
         DetailLine("Aktivitäts-ID", a.id.toString())
+
+        // Bestzeiten und geschaetzte Leistung am Berg (nur Rad, sobald berechnet)
+        if (a.typeKey in CYCLING_TYPES) {
+            val efforts = listOf(
+                5 to a.best5kS, 10 to a.best10kS, 20 to a.best20kS, 40 to a.best40kS
+            ).mapNotNull { (km, s) -> s?.takeIf { it > 0 }?.let { km to it } }
+            val powers = listOf(
+                5 to a.bestP5mW, 10 to a.bestP10mW, 20 to a.bestP20mW
+            ).mapNotNull { (min, w) -> w?.takeIf { it > 0 }?.let { min to it } }
+            if (efforts.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text("Bestzeiten", style = MaterialTheme.typography.titleMedium)
+                efforts.forEach { (km, s) ->
+                    DetailLine(
+                        "Schnellste $km km",
+                        "${formatDuration(s, withSeconds = true)} · ${fmtKm.format(km * 3600.0 / s)} km/h"
+                    )
+                }
+            }
+            if (powers.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text("Leistung am Berg (geschätzt)", style = MaterialTheme.typography.titleMedium)
+                powers.forEach { (min, w) -> DetailLine("Beste $min min", "${fmtInt.format(w)} W") }
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = {
