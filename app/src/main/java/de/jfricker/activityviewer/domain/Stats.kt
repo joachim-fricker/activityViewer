@@ -7,6 +7,17 @@ val HIKING_TYPES = listOf("walking", "running", "mountaineering", "hiking")
 /** Garmin-Typ "other" wird hier bewusst als Skitour gezaehlt (alle bisherigen "other" sind Skitouren). */
 val SKI_TYPES = listOf("backcountry_skiing", "other")
 
+/** Skisaison beginnt am 1. September (Saison 2023/24 = Sep 2023 bis Aug 2024). */
+const val SKI_SEASON_START_MONTH = 9
+
+/** "2023/24" fuer die Saison mit Startjahr 2023. */
+fun seasonLabel(startYear: Int): String =
+    "$startYear/${((startYear + 1) % 100).toString().padStart(2, '0')}"
+
+/** Kurzform "23/24" fuer die Diagrammachse. */
+fun seasonLabelShort(startYear: Int): String =
+    "${(startYear % 100).toString().padStart(2, '0')}/${((startYear + 1) % 100).toString().padStart(2, '0')}"
+
 private val GROUPED_TYPES = (CYCLING_TYPES + HIKING_TYPES + SKI_TYPES).toSet()
 
 data class Sums(val km: Double = 0.0, val elevation: Double = 0.0, val count: Int = 0) {

@@ -40,6 +40,9 @@ class ActivityRepository(
 
     fun yearTypeSums() = dao.yearTypeSums()
 
+    fun seasonTypeSums(types: List<String>, seasonStartMonth: Int) =
+        dao.seasonTypeSums(types, seasonStartMonth)
+
     fun activityRows() = dao.activityRows()
 
     fun activity(id: Long) = dao.activity(id)

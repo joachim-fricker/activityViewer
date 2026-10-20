@@ -38,6 +38,8 @@ import de.jfricker.activityviewer.domain.HIKING_TYPES
 import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.Sums
 import de.jfricker.activityviewer.domain.YearOverview
+import de.jfricker.activityviewer.domain.seasonLabel
+import de.jfricker.activityviewer.domain.seasonLabelShort
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -93,8 +95,12 @@ private val groupsWithCount = setOf(Group.SKI)
 private const val CHART_HEIGHT = 200f
 
 @Composable
-fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
-    if (overview.isEmpty()) {
+fun StatsScreen(
+    yearOverview: List<YearOverview>,
+    skiSeasons: List<YearOverview>,
+    modifier: Modifier = Modifier
+) {
+    if (yearOverview.isEmpty()) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Noch keine Daten")
         }
@@ -106,6 +112,12 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
     val fmt = remember { NumberFormat.getIntegerInstance(Locale.forLanguageTag("de-CH")) }
 
     val series = groupSeries.getValue(group)
+    // Skitouren nach Saison (z. B. 2023/24), alle anderen nach Kalenderjahr
+    val bySeason = group == Group.SKI
+    val overview = if (bySeason) skiSeasons else yearOverview
+    val periodName = if (bySeason) "Saison" else "Jahr"
+    fun label(y: YearOverview) = if (bySeason) seasonLabel(y.year) else y.year.toString()
+    fun axisLabel(y: YearOverview) = if (bySeason) seasonLabelShort(y.year) else y.year.toString()
     val showTotal = series.size > 1
     val showCount = group in groupsWithCount
 
@@ -146,14 +158,14 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
         }
 
         Text(
-            "${group.title}: ${metric.label} pro Jahr (${metric.unit})",
+            "${group.title}: ${metric.label} pro $periodName (${metric.unit})",
             style = MaterialTheme.typography.titleMedium
         )
 
         if (showTotal) Legend(series)
 
         StackedBarChart(
-            years = overview.map { it.year },
+            labels = overview.map { axisLabel(it) },
             valuesPerYear = valuesPerYear,
             colors = series.map { it.color },
             format = { fmt.format(it) }
@@ -161,7 +173,7 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
 
         // Tabelle: neuestes Jahr oben
         val header = buildList {
-            add("Jahr")
+            add(periodName)
             series.forEach { add(it.label) }
             if (showTotal) add("Total")
             if (showCount) add("Touren")
@@ -171,7 +183,7 @@ fun StatsScreen(overview: List<YearOverview>, modifier: Modifier = Modifier) {
         overview.indices.reversed().forEach { i ->
             val v = valuesPerYear[i]
             val cells = buildList {
-                add(overview[i].year.toString())
+                add(label(overview[i]))
                 v.forEach { add(fmt.format(it)) }
                 if (showTotal) add(fmt.format(v.sum()))
                 if (showCount) add(countOf(overview[i]).toString())
@@ -213,7 +225,7 @@ private fun Legend(series: List<Series>) {
 
 @Composable
 private fun StackedBarChart(
-    years: List<Int>,
+    labels: List<String>,
     valuesPerYear: List<List<Double>>,
     colors: List<Color>,
     format: (Double) -> String
@@ -228,7 +240,7 @@ private fun StackedBarChart(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        years.forEachIndexed { i, year ->
+        labels.forEachIndexed { i, label ->
             val values = valuesPerYear[i]
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(format(values.sum()), style = MaterialTheme.typography.labelSmall)
@@ -248,7 +260,7 @@ private fun StackedBarChart(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(year.toString(), style = MaterialTheme.typography.labelMedium)
+                Text(label, style = MaterialTheme.typography.labelMedium)
             }
         }
     }

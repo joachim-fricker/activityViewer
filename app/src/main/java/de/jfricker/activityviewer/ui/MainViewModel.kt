@@ -11,6 +11,8 @@ import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.SKI_SEASON_START_MONTH
+import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.buildOverview
 import kotlinx.coroutines.CancellationException
@@ -72,6 +74,12 @@ class MainViewModel(
 
     val overview: StateFlow<List<YearOverview>> =
         repo.yearTypeSums()
+            .map { buildOverview(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Skitouren nach Saison (Sep-Aug) statt Kalenderjahr. */
+    val skiSeasons: StateFlow<List<YearOverview>> =
+        repo.seasonTypeSums(SKI_TYPES, SKI_SEASON_START_MONTH)
             .map { buildOverview(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

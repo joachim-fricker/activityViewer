@@ -30,6 +30,26 @@ interface ActivityDao {
     )
     fun yearTypeSums(): Flow<List<YearTypeSum>>
 
+    /**
+     * Wie [yearTypeSums], aber nach Wintersaison gruppiert: "year" ist das Startjahr der Saison.
+     * Eine Saison beginnt am 1. des Monats [seasonStartMonth] (startTime = "yyyy-MM-dd HH:mm:ss").
+     */
+    @Query(
+        """
+        SELECT CASE WHEN CAST(substr(startTime, 6, 2) AS INTEGER) >= :seasonStartMonth
+                    THEN year ELSE year - 1 END AS year,
+               typeKey,
+               SUM(distanceM) AS distanceM,
+               SUM(elevationGain) AS elevationGain,
+               COUNT(*) AS cnt
+        FROM activity
+        WHERE typeKey IN (:types)
+        GROUP BY 1, typeKey
+        ORDER BY 1
+        """
+    )
+    fun seasonTypeSums(types: List<String>, seasonStartMonth: Int): Flow<List<YearTypeSum>>
+
     @Query(
         """
         SELECT id, name, typeKey, startTime, distanceM, durationS, elevationGain, locationName,
