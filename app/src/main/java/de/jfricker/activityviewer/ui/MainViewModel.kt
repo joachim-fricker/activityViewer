@@ -6,6 +6,7 @@ import de.jfricker.activityviewer.data.ActivityRepository
 import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.NearbyHit
 import de.jfricker.activityviewer.data.NetworkInfo
+import de.jfricker.activityviewer.data.PosterTrack
 import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
@@ -129,6 +130,9 @@ class MainViewModel(
         }
         emit(result)
     }
+
+    /** Track mit Hoehenprofil fuer das Tour-Poster (wirft IOException bei Netzwerkfehlern). */
+    suspend fun posterTrack(id: Long): PosterTrack = repo.posterTrack(id)
 
     fun hasLocationPermission(): Boolean = location.hasPermission()
 

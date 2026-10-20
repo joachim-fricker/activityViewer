@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -300,6 +301,14 @@ internal fun ActivityDetailScreen(
     val fmtKm = remember { km1() }
     val fmtInt = remember { NumberFormat.getIntegerInstance(LOCALE) }
     var mapExpanded by rememberSaveable { mutableStateOf(false) }
+    var showPoster by rememberSaveable { mutableStateOf(false) }
+
+    val current = activity
+    if (showPoster && current != null) {
+        BackHandler { showPoster = false }
+        PosterScreen(vm, current, onBack = { showPoster = false }, modifier)
+        return
+    }
 
     Column(modifier.fillMaxSize()) {
         TextButton(
@@ -324,7 +333,7 @@ internal fun ActivityDetailScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 val a = activity
-                if (a == null) Text("Lade …") else ActivityDetails(a, fmtKm, fmtInt)
+                if (a == null) Text("Lade …") else ActivityDetails(a, fmtKm, fmtInt, onPoster = { showPoster = true })
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -381,7 +390,12 @@ private fun TrackSection(
 }
 
 @Composable
-private fun ActivityDetails(a: ActivityEntity, fmtKm: NumberFormat, fmtInt: NumberFormat) {
+private fun ActivityDetails(
+    a: ActivityEntity,
+    fmtKm: NumberFormat,
+    fmtInt: NumberFormat,
+    onPoster: () -> Unit
+) {
     val uriHandler = LocalUriHandler.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(a.name, style = MaterialTheme.typography.headlineSmall)
@@ -448,6 +462,9 @@ private fun ActivityDetails(a: ActivityEntity, fmtKm: NumberFormat, fmtInt: Numb
         }
 
         Spacer(Modifier.height(12.dp))
+        Button(onClick = onPoster) {
+            Text("Als Bild teilen (Status)")
+        }
         OutlinedButton(onClick = {
             uriHandler.openUri("https://connect.garmin.com/modern/activity/${a.id}")
         }) {

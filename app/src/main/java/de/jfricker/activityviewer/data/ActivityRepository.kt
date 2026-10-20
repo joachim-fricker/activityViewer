@@ -7,6 +7,8 @@ import de.jfricker.activityviewer.domain.CYCLING_TYPES
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.NO_DEVICE
 import de.jfricker.activityviewer.domain.NO_EFFORT
+import de.jfricker.activityviewer.domain.ProfilePoint
+import de.jfricker.activityviewer.domain.elevationProfile
 import de.jfricker.activityviewer.domain.bestPowers
 import de.jfricker.activityviewer.domain.bestEfforts
 import de.jfricker.activityviewer.domain.boundingBox
@@ -30,6 +32,9 @@ import kotlinx.serialization.SerializationException
 import org.xmlpull.v1.XmlPullParserException
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
+
+/** Track (vereinfacht) und Hoehenprofil fuer das Tour-Poster. */
+data class PosterTrack(val points: List<GeoPoint>, val profile: List<ProfilePoint>)
 
 data class SyncResult(val remoteTotal: Int, val imported: Int, val failed: Int)
 
@@ -61,6 +66,27 @@ class ActivityRepository(
         return withContext(Dispatchers.Default) {
             try {
                 simplify(GpxParser.parse(gpx), TRACK_TOLERANCE_M)
+            } catch (e: XmlPullParserException) {
+                throw IOException("GPX-Datei nicht lesbar", e)
+            }
+        }
+    }
+
+    /**
+     * Track und Hoehenprofil fuer das Tour-Poster (feiner vereinfacht als fuer die Karte,
+     * damit die Linie im grossen Bild sauber aussieht). Leerer Track = kein GPS-Track.
+     */
+    suspend fun posterTrack(id: Long): PosterTrack {
+        val gpx = client.fetchGpx(id) ?: return PosterTrack(emptyList(), emptyList())
+        return withContext(Dispatchers.Default) {
+            try {
+                val timed = GpxParser.parseTimed(gpx)
+                val points = if (timed.isNotEmpty()) {
+                    timed.map { GeoPoint(it.lat, it.lon) }
+                } else {
+                    GpxParser.parse(gpx) // nur Routenpunkte, ohne Hoehen
+                }
+                PosterTrack(simplify(points, POSTER_TOLERANCE_M), elevationProfile(timed))
             } catch (e: XmlPullParserException) {
                 throw IOException("GPX-Datei nicht lesbar", e)
             }
@@ -262,6 +288,7 @@ class ActivityRepository(
         const val POLL_INTERVAL_MS = 4_000L
         const val MAX_POLLS = 75          // ca. 5 Minuten
         const val TRACK_TOLERANCE_M = 5.0 // Vereinfachung: max. Abweichung vom Original
+        const val POSTER_TOLERANCE_M = 3.0
         const val INDEX_TOLERANCE_M = 100.0       // Track-Index fuer die Umkreissuche
         const val INDEX_TOLERANCE_LONG_M = 1000.0 // ... bei Touren ueber 50 km
     }
