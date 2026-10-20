@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import de.jfricker.activityviewer.ui.ActivitiesScreen
+import de.jfricker.activityviewer.ui.CalendarScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.NearbyScreen
 import de.jfricker.activityviewer.ui.StatsScreen
@@ -64,16 +65,18 @@ fun AppContent(vm: MainViewModel) {
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Statistik") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Aktivitäten") })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Karte") })
-            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("In der Nähe") })
-            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Sync") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Kalender") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Aktivitäten") })
+            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Karte") })
+            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("In der Nähe") })
+            Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
-            1 -> ActivitiesScreen(vm)
-            2 -> WorldMapScreen(vm)
-            3 -> NearbyScreen(vm)
+            1 -> CalendarScreen(vm)
+            2 -> ActivitiesScreen(vm)
+            3 -> WorldMapScreen(vm)
+            4 -> NearbyScreen(vm)
             else -> SyncScreen(vm)
         }
     }
