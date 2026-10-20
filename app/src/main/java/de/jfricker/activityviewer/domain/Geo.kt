@@ -169,3 +169,31 @@ fun boxAround(c: GeoPoint, radiusM: Double): BBox {
     val dLon = radiusM / (M_PER_DEG * cos(Math.toRadians(c.lat)))
     return BBox(c.lat - dLat, c.lat + dLat, c.lon - dLon, c.lon + dLon)
 }
+
+/** Track einer Aktivitaet fuer die Heatmap. */
+data class HeatTrack(val id: Long, val typeKey: String, val points: List<GeoPoint>)
+
+/**
+ * Punkte in gleichmaessigem Abstand [stepM] entlang des Tracks. Fuer die Heatmap,
+ * damit jeder Wegabschnitt gleich stark zaehlt (unabhaengig von der Punktdichte der GPX).
+ */
+fun resample(points: List<GeoPoint>, stepM: Double): List<GeoPoint> {
+    if (points.size < 2) return points
+    val out = ArrayList<GeoPoint>()
+    out.add(points[0])
+    var sinceLast = 0.0 // Distanz seit dem letzten ausgegebenen Punkt
+    for (i in 1 until points.size) {
+        val a = points[i - 1]
+        val b = points[i]
+        val d = distanceM(a, b)
+        if (d <= 0.0) continue
+        var pos = stepM - sinceLast
+        while (pos <= d) {
+            val t = pos / d
+            out.add(GeoPoint(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t))
+            pos += stepM
+        }
+        sinceLast = d - (pos - stepM)
+    }
+    return out
+}

@@ -13,3 +13,10 @@ data class TrackIndexRow(
     val id: Long,
     val trackSimplified: String
 )
+
+/** Vereinfachter Track fuer die Heatmap. */
+data class HeatTrackRow(
+    val id: Long,
+    val typeKey: String,
+    val trackSimplified: String
+)

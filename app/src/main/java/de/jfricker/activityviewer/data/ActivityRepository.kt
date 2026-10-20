@@ -90,6 +90,8 @@ class ActivityRepository(
 
     fun missingTrackIndexCount() = dao.missingTrackIndexCount()
 
+    fun heatTrackRows() = dao.heatTracks()
+
     /**
      * Track-Index fuer die Umkreissuche aufbauen: fuer jede Aktivitaet ohne Index die GPX laden,
      * stark vereinfachen (100 m, bei Touren ueber 50 km 1 km) und nur Bounding-Box + Kurzform

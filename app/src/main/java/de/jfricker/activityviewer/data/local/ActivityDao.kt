@@ -114,6 +114,15 @@ interface ActivityDao {
         maxLon: Double
     ): List<TrackIndexRow>
 
+    /** Alle Outdoor-Tracks (Indoor/kein GPS ist als "" gespeichert). */
+    @Query(
+        """
+        SELECT id, typeKey, trackSimplified FROM activity
+        WHERE trackSimplified IS NOT NULL AND trackSimplified != ''
+        """
+    )
+    fun heatTracks(): Flow<List<HeatTrackRow>>
+
     @Query("SELECT * FROM activity WHERE id = :id")
     fun activity(id: Long): Flow<ActivityEntity?>
 }

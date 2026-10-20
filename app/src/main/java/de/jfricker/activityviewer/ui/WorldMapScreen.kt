@@ -356,7 +356,7 @@ private fun GeoJsonSource.clearData() =
  * Bereich, in dem die meisten Touren liegen (5 %- bis 95 %-Quantil), damit einzelne
  * Ferientouren weit weg die Startansicht nicht auf ganz Europa aufziehen.
  */
-private fun coreArea(points: List<GeoPoint>): List<GeoPoint> {
+internal fun coreArea(points: List<GeoPoint>): List<GeoPoint> {
     if (points.size < 20) return points
     val lats = points.map { it.lat }.sorted()
     val lons = points.map { it.lon }.sorted()
@@ -585,10 +585,11 @@ private fun SelectionCard(
 }
 
 @Composable
-private fun TourListCard(
+internal fun TourListCard(
     rows: List<ActivityRow>,
     onPick: (Long) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    title: String = "${rows.size} Touren an diesem Ort"
 ) {
     val fmtKm = remember { km1() }
     Card(
@@ -597,7 +598,7 @@ private fun TourListCard(
     ) {
         Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "${rows.size} Touren an diesem Ort",
+                title,
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f)
             )

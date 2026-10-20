@@ -12,6 +12,8 @@ import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
 import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.HeatTrack
+import de.jfricker.activityviewer.domain.decodePolyline
 import de.jfricker.activityviewer.domain.SKI_SEASON_START_MONTH
 import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.YearOverview
@@ -19,6 +21,7 @@ import de.jfricker.activityviewer.domain.buildOverview
 import de.jfricker.activityviewer.domain.periodCutoffKey
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -26,8 +29,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -206,6 +211,16 @@ class MainViewModel(
             }
         }
     }
+
+    // ---------------------------------------------------------------- Heatmap
+
+    /** Alle indexierten Tracks; null = noch nicht geladen. Aktualisiert sich beim Indexieren. */
+    val heatTracks: StateFlow<List<HeatTrack>?> =
+        repo.heatTrackRows()
+            .conflate()
+            .map { rows -> rows.map { HeatTrack(it.id, it.typeKey, decodePolyline(it.trackSimplified)) } }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     suspend fun nearby(center: GeoPoint, radiusM: Double): List<NearbyHit> =
         repo.nearby(center, radiusM)

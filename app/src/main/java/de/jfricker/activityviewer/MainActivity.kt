@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import de.jfricker.activityviewer.ui.ActivitiesScreen
 import de.jfricker.activityviewer.ui.CalendarScreen
+import de.jfricker.activityviewer.ui.HeatmapScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.NearbyScreen
 import de.jfricker.activityviewer.ui.StatsScreen
@@ -68,15 +69,17 @@ fun AppContent(vm: MainViewModel) {
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Kalender") })
             Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Aktivitäten") })
             Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Karte") })
-            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("In der Nähe") })
-            Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Sync") })
+            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Heatmap") })
+            Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("In der Nähe") })
+            Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Sync") })
         }
         when (tab) {
             0 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
             1 -> CalendarScreen(vm)
             2 -> ActivitiesScreen(vm)
             3 -> WorldMapScreen(vm)
-            4 -> NearbyScreen(vm)
+            4 -> HeatmapScreen(vm)
+            5 -> NearbyScreen(vm)
             else -> SyncScreen(vm)
         }
     }
