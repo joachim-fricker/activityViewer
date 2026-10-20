@@ -10,11 +10,14 @@ import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
+import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.SKI_SEASON_START_MONTH
 import de.jfricker.activityviewer.domain.SKI_TYPES
 import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.buildOverview
+import de.jfricker.activityviewer.domain.periodCutoffKey
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -32,6 +36,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.maplibre.android.camera.CameraPosition
 import java.io.IOException
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
 sealed interface SyncState {
@@ -72,14 +77,29 @@ class MainViewModel(
     val count: StateFlow<Int> =
         repo.count().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
+    /** Jahresvergleich "bis heute": jedes Jahr / jede Saison nur bis zum heutigen Tag. */
+    private val _untilToday = MutableStateFlow(false)
+    val untilToday: StateFlow<Boolean> = _untilToday.asStateFlow()
+
+    fun setUntilToday(on: Boolean) {
+        _untilToday.value = on
+    }
+
+    private fun cutoff(on: Boolean, startMonth: Int) =
+        if (on) periodCutoffKey(LocalDate.now(), startMonth) else FULL_PERIOD
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val overview: StateFlow<List<YearOverview>> =
-        repo.yearTypeSums()
+        _untilToday.flatMapLatest { repo.yearTypeSums(cutoff(it, 1)) }
             .map { buildOverview(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Skitouren nach Saison (Sep-Aug) statt Kalenderjahr. */
+    @OptIn(ExperimentalCoroutinesApi::class)
     val skiSeasons: StateFlow<List<YearOverview>> =
-        repo.seasonTypeSums(SKI_TYPES, SKI_SEASON_START_MONTH)
+        _untilToday.flatMapLatest {
+            repo.seasonTypeSums(SKI_TYPES, SKI_SEASON_START_MONTH, cutoff(it, SKI_SEASON_START_MONTH))
+        }
             .map { buildOverview(it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

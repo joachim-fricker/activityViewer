@@ -41,6 +41,8 @@ import de.jfricker.activityviewer.domain.YearOverview
 import de.jfricker.activityviewer.domain.seasonLabel
 import de.jfricker.activityviewer.domain.seasonLabelShort
 import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private enum class Metric(val label: String, val unit: String) {
@@ -98,6 +100,8 @@ private const val CHART_HEIGHT = 200f
 fun StatsScreen(
     yearOverview: List<YearOverview>,
     skiSeasons: List<YearOverview>,
+    untilToday: Boolean,
+    onUntilTodayChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (yearOverview.isEmpty()) {
@@ -118,6 +122,7 @@ fun StatsScreen(
     val periodName = if (bySeason) "Saison" else "Jahr"
     fun label(y: YearOverview) = if (bySeason) seasonLabel(y.year) else y.year.toString()
     fun axisLabel(y: YearOverview) = if (bySeason) seasonLabelShort(y.year) else y.year.toString()
+    val todayLabel = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("d.M.")) }
     val showTotal = series.size > 1
     val showCount = group in groupsWithCount
 
@@ -135,7 +140,10 @@ fun StatsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Metric.entries.forEach {
                 FilterChip(
                     selected = metric == it,
@@ -143,6 +151,11 @@ fun StatsScreen(
                     label = { Text(it.label) }
                 )
             }
+            FilterChip(
+                selected = untilToday,
+                onClick = { onUntilTodayChange(!untilToday) },
+                label = { Text("Bis heute") }
+            )
         }
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
@@ -158,7 +171,11 @@ fun StatsScreen(
         }
 
         Text(
-            "${group.title}: ${metric.label} pro $periodName (${metric.unit})",
+            buildString {
+                append("${group.title}: ${metric.label} pro $periodName")
+                if (untilToday) append(", jeweils bis $todayLabel")
+                append(" (${metric.unit})")
+            },
             style = MaterialTheme.typography.titleMedium
         )
 

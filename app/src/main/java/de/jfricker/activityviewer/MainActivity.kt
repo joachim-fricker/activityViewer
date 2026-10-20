@@ -59,6 +59,7 @@ fun AppContent(vm: MainViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val overview by vm.overview.collectAsStateWithLifecycle()
     val skiSeasons by vm.skiSeasons.collectAsStateWithLifecycle()
+    val untilToday by vm.untilToday.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
@@ -69,7 +70,7 @@ fun AppContent(vm: MainViewModel) {
             Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Sync") })
         }
         when (tab) {
-            0 -> StatsScreen(overview, skiSeasons)
+            0 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
             1 -> ActivitiesScreen(vm)
             2 -> WorldMapScreen(vm)
             3 -> NearbyScreen(vm)

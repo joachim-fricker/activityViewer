@@ -10,6 +10,17 @@ val SKI_TYPES = listOf("backcountry_skiing", "other")
 /** Skisaison beginnt am 1. September (Saison 2023/24 = Sep 2023 bis Aug 2024). */
 const val SKI_SEASON_START_MONTH = 9
 
+/** cutoffKey ohne Einschraenkung: ganzes Jahr / ganze Saison. */
+const val FULL_PERIOD = 9999
+
+/**
+ * Position eines Tages innerhalb einer Periode, die am 1. von [startMonth] beginnt:
+ * (Monate seit Periodenbeginn) * 100 + Tag. Kalenderjahr: startMonth = 1.
+ * Muss zur Formel in den DAO-Queries passen.
+ */
+fun periodCutoffKey(date: java.time.LocalDate, startMonth: Int): Int =
+    ((date.monthValue - startMonth + 12) % 12) * 100 + date.dayOfMonth
+
 /** "2023/24" fuer die Saison mit Startjahr 2023. */
 fun seasonLabel(startYear: Int): String =
     "$startYear/${((startYear + 1) % 100).toString().padStart(2, '0')}"

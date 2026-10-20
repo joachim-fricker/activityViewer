@@ -17,6 +17,10 @@ interface ActivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(activity: ActivityEntity)
 
+    /**
+     * Summen je Kalenderjahr und Typ. Mit [cutoffKey] (siehe periodCutoffKey) werden nur
+     * Aktivitaeten bis zum gleichen Tag im Jahr gezaehlt (Jahresvergleich "bis heute").
+     */
     @Query(
         """
         SELECT year, typeKey,
@@ -24,15 +28,18 @@ interface ActivityDao {
                SUM(elevationGain) AS elevationGain,
                COUNT(*) AS cnt
         FROM activity
+        WHERE (CAST(substr(startTime, 6, 2) AS INTEGER) - 1) * 100
+              + CAST(substr(startTime, 9, 2) AS INTEGER) <= :cutoffKey
         GROUP BY year, typeKey
         ORDER BY year
         """
     )
-    fun yearTypeSums(): Flow<List<YearTypeSum>>
+    fun yearTypeSums(cutoffKey: Int): Flow<List<YearTypeSum>>
 
     /**
      * Wie [yearTypeSums], aber nach Wintersaison gruppiert: "year" ist das Startjahr der Saison.
      * Eine Saison beginnt am 1. des Monats [seasonStartMonth] (startTime = "yyyy-MM-dd HH:mm:ss").
+     * [cutoffKey] begrenzt wie bei [yearTypeSums] auf den gleichen Tag innerhalb der Saison.
      */
     @Query(
         """
@@ -44,11 +51,17 @@ interface ActivityDao {
                COUNT(*) AS cnt
         FROM activity
         WHERE typeKey IN (:types)
+          AND ((CAST(substr(startTime, 6, 2) AS INTEGER) - :seasonStartMonth + 12) % 12) * 100
+              + CAST(substr(startTime, 9, 2) AS INTEGER) <= :cutoffKey
         GROUP BY 1, typeKey
         ORDER BY 1
         """
     )
-    fun seasonTypeSums(types: List<String>, seasonStartMonth: Int): Flow<List<YearTypeSum>>
+    fun seasonTypeSums(
+        types: List<String>,
+        seasonStartMonth: Int,
+        cutoffKey: Int
+    ): Flow<List<YearTypeSum>>
 
     @Query(
         """
