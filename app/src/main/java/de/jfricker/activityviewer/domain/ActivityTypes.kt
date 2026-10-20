@@ -54,3 +54,12 @@ fun trustedMaxSpeed(typeKey: String, maxSpeed: Double?, deviceId: Long?): Double
     }
     return v
 }
+
+/** Touren, die nicht in die Rekorde gehoeren (versehentlich mit dem E-Bike aufgezeichnet). */
+val RECORD_EXCLUDED_IDS = setOf(
+    9304690413L,
+    9107878454L,
+    9110118441L,
+    9076916831L,
+    9125532196L
+)

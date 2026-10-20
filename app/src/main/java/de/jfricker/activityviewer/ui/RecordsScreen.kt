@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.jfricker.activityviewer.data.local.RecordRow
 import de.jfricker.activityviewer.domain.CYCLING_TYPES
+import de.jfricker.activityviewer.domain.RECORD_EXCLUDED_IDS
 import de.jfricker.activityviewer.domain.SYSTEM_MASS_KG
 import de.jfricker.activityviewer.domain.isIndoor
 import de.jfricker.activityviewer.domain.showsSpeed
@@ -118,10 +119,14 @@ fun RecordsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         )
     }
 
-    // Indoor-/virtuelle Fahrten zaehlen fuer Rekorde nicht
+    // Indoor-/virtuelle Fahrten und ausgeschlossene Touren (E-Bike) zaehlen fuer Rekorde nicht
     val visible = remember(rows, quick) {
         val types = quick.types
-        rows.filter { (types == null || it.typeKey in types) && !isIndoor(it.typeKey, it.name) }
+        rows.filter {
+            (types == null || it.typeKey in types) &&
+                !isIndoor(it.typeKey, it.name) &&
+                it.id !in RECORD_EXCLUDED_IDS
+        }
     }
     val showCycling = quick == QuickFilter.ALL || quick == QuickFilter.CYCLING
 
