@@ -40,7 +40,9 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val app = application as ActivityViewerApp
-                MainViewModel(app.repository, app.tokenStore, app.locationProvider, app.networkInfo)
+                MainViewModel(
+                    app.repository, app.tokenStore, app.locationProvider, app.networkInfo, app.photoRepository
+                )
             }
         }
     }

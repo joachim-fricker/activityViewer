@@ -6,6 +6,9 @@ import de.jfricker.activityviewer.data.ActivityRepository
 import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.NearbyHit
 import de.jfricker.activityviewer.data.NetworkInfo
+import de.jfricker.activityviewer.data.PhotoAccess
+import de.jfricker.activityviewer.data.PhotoRepository
+import de.jfricker.activityviewer.data.TourPhoto
 import de.jfricker.activityviewer.data.PosterTrack
 import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
@@ -15,6 +18,7 @@ import de.jfricker.activityviewer.data.local.RecordRow
 import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.HeatTrack
+import de.jfricker.activityviewer.domain.TimedPoint
 import de.jfricker.activityviewer.domain.RouteGroup
 import de.jfricker.activityviewer.domain.RouteInput
 import de.jfricker.activityviewer.domain.findRepeatedRoutes
@@ -45,6 +49,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import android.graphics.Bitmap
 import org.maplibre.android.camera.CameraPosition
 import java.io.IOException
 import java.time.LocalDate
@@ -67,7 +72,8 @@ sealed interface SyncState {
 
 sealed interface TrackState {
     data object Loading : TrackState
-    data class Loaded(val points: List<GeoPoint>) : TrackState
+    /** timeline: Punkte mit Zeitstempel, nur wenn mit withTimeline angefordert (fuer die Fotos). */
+    data class Loaded(val points: List<GeoPoint>, val timeline: List<TimedPoint> = emptyList()) : TrackState
     data object NoTrack : TrackState
     data class Error(val message: String) : TrackState
 }
@@ -76,7 +82,8 @@ class MainViewModel(
     private val repo: ActivityRepository,
     private val tokenStore: TokenStore,
     private val location: LocationProvider,
-    private val network: NetworkInfo
+    private val network: NetworkInfo,
+    private val photos: PhotoRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -120,16 +127,28 @@ class MainViewModel(
 
     fun activity(id: Long): Flow<ActivityEntity?> = repo.activity(id)
 
-    fun track(id: Long): Flow<TrackState> = flow {
+    fun track(id: Long, withTimeline: Boolean = false): Flow<TrackState> = flow {
         emit(TrackState.Loading)
         val result = try {
-            val points = repo.track(id)
-            if (points.isEmpty()) TrackState.NoTrack else TrackState.Loaded(points)
+            val (points, timeline) = if (withTimeline) repo.trackWithTimeline(id) else repo.track(id) to emptyList<TimedPoint>()
+            if (points.isEmpty()) TrackState.NoTrack else TrackState.Loaded(points, timeline)
         } catch (e: IOException) {
             TrackState.Error(e.message ?: "Netzwerkfehler")
         }
         emit(result)
     }
+
+    // ------------------------------------------------------------ Fotos vom Handy
+
+    fun photoAccess(): PhotoAccess = photos.access()
+
+    suspend fun photosBetween(window: LongRange): List<TourPhoto> = photos.photosBetween(window)
+
+    suspend fun photoThumbnail(photo: TourPhoto): Bitmap? = photos.thumbnail(photo, PhotoRepository.THUMB_PX)
+
+    suspend fun photoMapIcon(photo: TourPhoto, sizePx: Int): Bitmap? = photos.mapIcon(photo, sizePx)
+
+    suspend fun photoFull(photo: TourPhoto, maxSide: Int): Bitmap? = photos.fullImage(photo, maxSide)
 
     /** Track mit Hoehenprofil fuer das Tour-Poster (wirft IOException bei Netzwerkfehlern). */
     suspend fun posterTrack(id: Long): PosterTrack = repo.posterTrack(id)

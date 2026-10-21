@@ -302,11 +302,24 @@ internal fun ActivityDetailScreen(
     val fmtInt = remember { NumberFormat.getIntegerInstance(LOCALE) }
     var mapExpanded by rememberSaveable { mutableStateOf(false) }
     var showPoster by rememberSaveable { mutableStateOf(false) }
+    var photoIndex by rememberSaveable { mutableIntStateOf(-1) }
+
+    var retry by remember { mutableIntStateOf(0) }
+    val trackFlow = remember(id, retry) { vm.track(id, withTimeline = true) }
+    val trackState by trackFlow.collectAsStateWithLifecycle(initialValue = TrackState.Loading)
+    val photoState = rememberTourPhotos(vm, activity, trackState)
+    val photoMarkers = rememberPhotoMarkers(vm, photoState.photos, trackState)
 
     val current = activity
     if (showPoster && current != null) {
         BackHandler { showPoster = false }
         PosterScreen(vm, current, onBack = { showPoster = false }, modifier)
+        return
+    }
+    val photos = photoState.photos
+    if (photos != null && photoIndex in photos.indices) {
+        BackHandler { photoIndex = -1 }
+        PhotoViewer(vm, photos, photoIndex, onBack = { photoIndex = -1 }, modifier)
         return
     }
 
@@ -323,7 +336,10 @@ internal fun ActivityDetailScreen(
         } else {
             Modifier.fillMaxWidth().height(320.dp)
         }
-        TrackSection(vm, id, mapExpanded, { mapExpanded = !mapExpanded }, mapModifier)
+        TrackSection(
+            vm, trackState, { retry++ }, mapExpanded, { mapExpanded = !mapExpanded }, mapModifier,
+            photoMarkers, onPhotoClick = { photoIndex = it }
+        )
 
         if (!mapExpanded) {
             Column(
@@ -332,6 +348,8 @@ internal fun ActivityDetailScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
+                PhotosSection(vm, photoState, onOpen = { photoIndex = it })
+                Spacer(Modifier.height(12.dp))
                 val a = activity
                 if (a == null) Text("Lade …") else ActivityDetails(a, fmtKm, fmtInt, onPoster = { showPoster = true })
                 Spacer(Modifier.height(16.dp))
@@ -343,15 +361,14 @@ internal fun ActivityDetailScreen(
 @Composable
 private fun TrackSection(
     vm: MainViewModel,
-    id: Long,
+    state: TrackState,
+    onRetry: () -> Unit,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
-    mapModifier: Modifier
+    mapModifier: Modifier,
+    photoMarkers: List<PhotoMarker>,
+    onPhotoClick: (Int) -> Unit
 ) {
-    var retry by remember { mutableIntStateOf(0) }
-    val trackFlow = remember(id, retry) { vm.track(id) }
-    val state by trackFlow.collectAsStateWithLifecycle(initialValue = TrackState.Loading)
-
     val me = rememberMyLocation(vm)
 
     when (val s = state) {
@@ -367,7 +384,9 @@ private fun TrackSection(
             me = me,
             expanded = expanded,
             onToggleExpanded = onToggleExpanded,
-            modifier = mapModifier
+            modifier = mapModifier,
+            photos = photoMarkers,
+            onPhotoClick = onPhotoClick
         )
         is TrackState.NoTrack -> Text(
             "Für diese Aktivität gibt es keinen GPS-Track.",
@@ -384,7 +403,7 @@ private fun TrackSection(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = { retry++ }) { Text("Erneut") }
+            TextButton(onClick = onRetry) { Text("Erneut") }
         }
     }
 }

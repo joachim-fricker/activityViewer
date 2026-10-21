@@ -8,6 +8,7 @@ import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.NO_DEVICE
 import de.jfricker.activityviewer.domain.NO_EFFORT
 import de.jfricker.activityviewer.domain.ProfilePoint
+import de.jfricker.activityviewer.domain.TimedPoint
 import de.jfricker.activityviewer.domain.elevationProfile
 import de.jfricker.activityviewer.domain.bestPowers
 import de.jfricker.activityviewer.domain.bestEfforts
@@ -66,6 +67,27 @@ class ActivityRepository(
         return withContext(Dispatchers.Default) {
             try {
                 simplify(GpxParser.parse(gpx), TRACK_TOLERANCE_M)
+            } catch (e: XmlPullParserException) {
+                throw IOException("GPX-Datei nicht lesbar", e)
+            }
+        }
+    }
+
+    /**
+     * Wie track(), zusaetzlich alle Punkte mit Zeitstempel (nach Zeit sortiert),
+     * um Fotos ueber die Aufnahmezeit auf dem Track zu platzieren.
+     */
+    suspend fun trackWithTimeline(id: Long): Pair<List<GeoPoint>, List<TimedPoint>> {
+        val gpx = client.fetchGpx(id) ?: return emptyList<GeoPoint>() to emptyList()
+        return withContext(Dispatchers.Default) {
+            try {
+                val timed = GpxParser.parseTimed(gpx)
+                val points = if (timed.isNotEmpty()) {
+                    timed.map { GeoPoint(it.lat, it.lon) }
+                } else {
+                    GpxParser.parse(gpx)
+                }
+                simplify(points, TRACK_TOLERANCE_M) to timed.filter { it.timeMs > 0 }.sortedBy { it.timeMs }
             } catch (e: XmlPullParserException) {
                 throw IOException("GPX-Datei nicht lesbar", e)
             }

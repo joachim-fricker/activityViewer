@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -19,10 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.graphics.Bitmap
+import android.graphics.RectF
 import de.jfricker.activityviewer.domain.GeoPoint
 import de.jfricker.activityviewer.domain.distanceToTrackM
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -34,6 +40,12 @@ private const val SRC_TRACK = "track"
 private const val SRC_START = "track-start"
 private const val SRC_END = "track-end"
 private const val SRC_ME = "me"
+private const val SRC_PHOTOS = "photos"
+private const val LAYER_PHOTO_DOTS = "photo-dots"
+private const val LAYER_PHOTO_ICONS = "photo-icons"
+
+/** Foto auf der Karte: index in der Fotoliste, Position, rundes Vorschaubild (null = nur Punkt). */
+data class PhotoMarker(val index: Int, val pos: GeoPoint, val icon: Bitmap?)
 
 /** Karte mit einem einzelnen Track (Detailansicht). */
 @Composable
@@ -42,8 +54,12 @@ fun TrackMap(
     me: GeoPoint?,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photos: List<PhotoMarker> = emptyList(),
+    onPhotoClick: (index: Int) -> Unit = {}
 ) {
+    val touchPx = with(LocalDensity.current) { 16.dp.toPx() }
+    val currentOnPhotoClick by rememberUpdatedState(onPhotoClick)
     val paddingPx = with(LocalDensity.current) { 40.dp.roundToPx() }
     val mapView = rememberMapViewWithLifecycle()
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -56,11 +72,28 @@ fun TrackMap(
             m.uiSettings.isTiltGesturesEnabled = false
             m.uiSettings.isRotateGesturesEnabled = false
             m.setStyle(Style.Builder().fromJson(STYLE_JSON)) { s ->
-                listOf(SRC_TRACK, SRC_START, SRC_END, SRC_ME).forEach { s.addSource(GeoJsonSource(it)) }
+                listOf(SRC_TRACK, SRC_START, SRC_END, SRC_PHOTOS, SRC_ME).forEach { s.addSource(GeoJsonSource(it)) }
                 trackLineLayers(SRC_TRACK, "track").forEach { s.addLayer(it) }
                 s.addLayer(markerLayer("track-start-dot", SRC_START, "#43A047", 7f))
                 s.addLayer(markerLayer("track-end-dot", SRC_END, "#212121", 7f))
+                s.addLayer(markerLayer(LAYER_PHOTO_DOTS, SRC_PHOTOS, "#FB8C00", 6f))
+                s.addLayer(
+                    SymbolLayer(LAYER_PHOTO_ICONS, SRC_PHOTOS).withProperties(
+                        PropertyFactory.iconImage(Expression.get("img")),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true)
+                    )
+                )
                 s.addLayer(markerLayer("me-dot", SRC_ME, "#1E88E5", 9f))
+                m.addOnMapClickListener { latLng ->
+                    val p = m.projection.toScreenLocation(latLng)
+                    val hit = m.queryRenderedFeatures(
+                        RectF(p.x - touchPx, p.y - touchPx, p.x + touchPx, p.y + touchPx),
+                        LAYER_PHOTO_ICONS, LAYER_PHOTO_DOTS
+                    ).firstOrNull()?.getNumberProperty("idx")?.toInt()
+                    if (hit != null) currentOnPhotoClick(hit)
+                    hit != null
+                }
                 map = m
                 style = s
             }
@@ -81,6 +114,21 @@ fun TrackMap(
             fit(m, track, paddingPx, animate = false)
             fittedTrack = track
         }
+    }
+
+    LaunchedEffect(style, photos) {
+        val s = style ?: return@LaunchedEffect
+        val features = photos.map { pm ->
+            Feature.fromGeometry(pm.pos.toPoint()).apply {
+                addNumberProperty("idx", pm.index)
+                if (pm.icon != null) {
+                    val name = "photo-${pm.index}"
+                    s.addImage(name, pm.icon)
+                    addStringProperty("img", name)
+                }
+            }
+        }
+        s.getSourceAs<GeoJsonSource>(SRC_PHOTOS)?.setGeoJson(FeatureCollection.fromFeatures(features))
     }
 
     LaunchedEffect(style, me) {

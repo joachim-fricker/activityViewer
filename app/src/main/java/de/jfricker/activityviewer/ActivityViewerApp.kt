@@ -5,6 +5,7 @@ import androidx.room.Room
 import de.jfricker.activityviewer.data.ActivityRepository
 import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.NetworkInfo
+import de.jfricker.activityviewer.data.PhotoRepository
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.AppDatabase
 import de.jfricker.activityviewer.data.local.MIGRATION_2_3
@@ -32,6 +33,7 @@ class ActivityViewerApp : Application() {
     val tokenStore by lazy { TokenStore(this) }
     val locationProvider by lazy { LocationProvider(this) }
     val networkInfo by lazy { NetworkInfo(this) }
+    val photoRepository by lazy { PhotoRepository(this) }
     val repository by lazy {
         ActivityRepository(GitHubClient(), WorkflowClient(), database.activityDao())
     }
