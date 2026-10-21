@@ -62,13 +62,16 @@ class PhotoRepository(private val context: Context) {
     /** Alle Fotos mit Aufnahmezeitpunkt im Bereich (UTC-Millisekunden), aelteste zuerst. */
     suspend fun photosBetween(window: LongRange): List<TourPhoto> = withContext(Dispatchers.IO) {
         if (access() == PhotoAccess.NONE) return@withContext emptyList()
-        // Alle vom MediaStore erfassten Ordner (DCIM/Camera, Data/images, Pictures, ...).
+        // Alle vom MediaStore erfassten Ordner (DCIM/Camera, Data/images, Pictures, ...) ausser WhatsApp.
         // Bilder ohne Aufnahmezeit (z. B. kopiert, ohne EXIF) werden ueber das Aenderungsdatum gefunden.
         val taken = MediaStore.Images.Media.DATE_TAKEN       // Millisekunden
         val modified = MediaStore.Images.Media.DATE_MODIFIED // Sekunden
         val projection = arrayOf(MediaStore.Images.Media._ID, taken, modified)
-        val selection = "($taken BETWEEN ? AND ?) OR " +
-            "(($taken IS NULL OR $taken = 0) AND $modified BETWEEN ? AND ?)"
+        val path = MediaStore.Images.Media.RELATIVE_PATH
+        // Keine WhatsApp-Bilder (empfangen oder gesendet, liegen unter .../WhatsApp/Media/...)
+        val selection = "(($taken BETWEEN ? AND ?) OR " +
+            "(($taken IS NULL OR $taken = 0) AND $modified BETWEEN ? AND ?)) " +
+            "AND ($path IS NULL OR $path NOT LIKE '%WhatsApp%')"
         val args = arrayOf(
             window.first.toString(), window.last.toString(),
             (window.first / 1000).toString(), (window.last / 1000).toString()
