@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import de.jfricker.activityviewer.ui.ActivitiesScreen
 import de.jfricker.activityviewer.ui.CalendarScreen
+import de.jfricker.activityviewer.ui.CountriesScreen
 import de.jfricker.activityviewer.ui.HeatmapScreen
 import de.jfricker.activityviewer.ui.MainViewModel
 import de.jfricker.activityviewer.ui.NearbyScreen
@@ -41,7 +42,8 @@ class MainActivity : ComponentActivity() {
             initializer {
                 val app = application as ActivityViewerApp
                 MainViewModel(
-                    app.repository, app.tokenStore, app.locationProvider, app.networkInfo, app.photoRepository
+                    app.repository, app.tokenStore, app.locationProvider, app.networkInfo, app.photoRepository,
+                    app.photoCountryRepository
                 )
             }
         }
@@ -78,6 +80,7 @@ fun AppContent(vm: MainViewModel) {
             Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Rekorde") })
             Tab(selected = tab == 7, onClick = { tab = 7 }, text = { Text("Karte") })
             Tab(selected = tab == 8, onClick = { tab = 8 }, text = { Text("Strecken") })
+            Tab(selected = tab == 9, onClick = { tab = 9 }, text = { Text("Länder") })
         }
         when (tab) {
             0 -> ActivitiesScreen(vm)
@@ -88,7 +91,8 @@ fun AppContent(vm: MainViewModel) {
             5 -> NearbyScreen(vm)
             6 -> RecordsScreen(vm)
             7 -> WorldMapScreen(vm)
-            else -> RoutesScreen(vm)
+            8 -> RoutesScreen(vm)
+            else -> CountriesScreen(vm)
         }
     }
 }

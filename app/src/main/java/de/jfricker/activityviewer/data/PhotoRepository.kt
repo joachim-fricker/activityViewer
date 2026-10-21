@@ -24,6 +24,9 @@ import java.io.IOException
 import kotlin.math.max
 import kotlin.math.min
 
+/** Foto fuer den Laender-Scan: MediaStore-ID, Aenderungsdatum (s), Aufnahmezeit (ms). */
+data class MediaPhoto(val id: Long, val modified: Long, val takenMs: Long)
+
 /** Ein Foto aus der Galerie des Handys. exifPos = GPS-Position aus dem Foto (falls vorhanden). */
 data class TourPhoto(val id: Long, val uri: Uri, val takenMs: Long, val exifPos: GeoPoint?)
 
@@ -101,6 +104,38 @@ class PhotoRepository(private val context: Context) {
             TourPhoto(id, uri, taken, if (withLocation) exifPosition(uri) else null)
         }
     }
+
+    fun hasLocationAccess(): Boolean = granted(Manifest.permission.ACCESS_MEDIA_LOCATION)
+
+    /** Alle Fotos der Galerie (ohne WhatsApp), fuer die Laenderkarte. */
+    suspend fun allPhotos(): List<MediaPhoto> = withContext(Dispatchers.IO) {
+        if (access() == PhotoAccess.NONE) return@withContext emptyList()
+        val taken = MediaStore.Images.Media.DATE_TAKEN
+        val modified = MediaStore.Images.Media.DATE_MODIFIED
+        val path = MediaStore.Images.Media.RELATIVE_PATH
+        val projection = arrayOf(MediaStore.Images.Media._ID, taken, modified)
+        val selection = "$path IS NULL OR $path NOT LIKE '%WhatsApp%'"
+        val out = ArrayList<MediaPhoto>()
+        try {
+            resolver.query(collection, projection, selection, null, null)?.use { c ->
+                val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                val takenCol = c.getColumnIndexOrThrow(taken)
+                val modCol = c.getColumnIndexOrThrow(modified)
+                while (c.moveToNext()) {
+                    val mod = c.getLong(modCol)
+                    val t = if (c.isNull(takenCol) || c.getLong(takenCol) == 0L) mod * 1000 else c.getLong(takenCol)
+                    out += MediaPhoto(c.getLong(idCol), mod, t)
+                }
+            }
+        } catch (e: SecurityException) {
+            return@withContext emptyList()
+        }
+        out
+    }
+
+    /** GPS-Position eines Fotos (blockierend, im IO-Kontext aufrufen); null = keine. */
+    fun positionOf(id: Long): GeoPoint? =
+        if (hasLocationAccess()) exifPosition(ContentUris.withAppendedId(collection, id)) else null
 
     /** GPS aus den EXIF-Daten; braucht ACCESS_MEDIA_LOCATION, sonst entfernt Android die Position. */
     private fun exifPosition(uri: Uri): GeoPoint? = try {

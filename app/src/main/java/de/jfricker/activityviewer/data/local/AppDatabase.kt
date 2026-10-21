@@ -5,9 +5,10 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ActivityEntity::class], version = 8, exportSchema = false)
+@Database(entities = [ActivityEntity::class, PhotoLocationEntity::class], version = 9, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun activityDao(): ActivityDao
+    abstract fun photoLocationDao(): PhotoLocationDao
 }
 
 /** v3: Bestzeiten Rad (5/10/20 km) - Spalten ergaenzen, bestehende Daten bleiben erhalten. */
@@ -57,5 +58,16 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE activity ADD COLUMN deviceId INTEGER")
+    }
+}
+
+/** v9: Cache der Foto-Positionen und Laender fuer die Laenderkarte. */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `photo_location` (" +
+                "`id` INTEGER NOT NULL, `modified` INTEGER NOT NULL, `takenMs` INTEGER NOT NULL, " +
+                "`lat` REAL, `lon` REAL, `country` TEXT, PRIMARY KEY(`id`))"
+        )
     }
 }

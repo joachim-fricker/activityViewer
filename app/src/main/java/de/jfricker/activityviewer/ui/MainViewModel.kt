@@ -7,6 +7,7 @@ import de.jfricker.activityviewer.data.LocationProvider
 import de.jfricker.activityviewer.data.NearbyHit
 import de.jfricker.activityviewer.data.NetworkInfo
 import de.jfricker.activityviewer.data.PhotoAccess
+import de.jfricker.activityviewer.data.PhotoCountryRepository
 import de.jfricker.activityviewer.data.PhotoRepository
 import de.jfricker.activityviewer.data.TourPhoto
 import de.jfricker.activityviewer.data.PosterTrack
@@ -14,10 +15,13 @@ import de.jfricker.activityviewer.data.SyncResult
 import de.jfricker.activityviewer.data.TokenStore
 import de.jfricker.activityviewer.data.local.ActivityEntity
 import de.jfricker.activityviewer.data.local.ActivityRow
+import de.jfricker.activityviewer.data.local.CountryStat
 import de.jfricker.activityviewer.data.local.RecordRow
 import de.jfricker.activityviewer.domain.FULL_PERIOD
 import de.jfricker.activityviewer.domain.GeoPoint
+import de.jfricker.activityviewer.domain.EXCLUDED_COUNTRIES
 import de.jfricker.activityviewer.domain.HeatTrack
+import de.jfricker.activityviewer.domain.MANUAL_VISITED_COUNTRIES
 import de.jfricker.activityviewer.domain.TimedPoint
 import de.jfricker.activityviewer.domain.RouteGroup
 import de.jfricker.activityviewer.domain.RouteInput
@@ -49,6 +53,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import android.graphics.Bitmap
 import org.maplibre.android.camera.CameraPosition
 import java.io.IOException
@@ -70,6 +75,12 @@ sealed interface SyncState {
             this is Checking || this is Loading
 }
 
+sealed interface CountryScan {
+    data object Idle : CountryScan
+    data class Running(val done: Int, val total: Int) : CountryScan
+    data class Error(val message: String) : CountryScan
+}
+
 sealed interface TrackState {
     data object Loading : TrackState
     /** timeline: Punkte mit Zeitstempel, nur wenn mit withTimeline angefordert (fuer die Fotos). */
@@ -83,7 +94,8 @@ class MainViewModel(
     private val tokenStore: TokenStore,
     private val location: LocationProvider,
     private val network: NetworkInfo,
-    private val photos: PhotoRepository
+    private val photos: PhotoRepository,
+    private val countries: PhotoCountryRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
@@ -147,6 +159,49 @@ class MainViewModel(
     suspend fun photoThumbnail(photo: TourPhoto): Bitmap? = photos.thumbnail(photo, PhotoRepository.THUMB_PX)
 
     suspend fun photoMapIcon(photo: TourPhoto, sizePx: Int): Bitmap? = photos.mapIcon(photo, sizePx)
+
+    fun hasPhotoLocationAccess(): Boolean = photos.hasLocationAccess()
+
+    // ------------------------------------------------------------ Laenderkarte (GPS aus den Fotos)
+
+    val countryStats: StateFlow<List<CountryStat>> =
+        countries.stats()
+            .map { stats ->
+                // Fotos aus ausgeschlossenen Laendern ignorieren, manuell eingetragene ergaenzen (cnt = 0)
+                val fromPhotos = stats.filter { it.country !in EXCLUDED_COUNTRIES }
+                val known = fromPhotos.mapTo(HashSet()) { it.country }
+                fromPhotos + (MANUAL_VISITED_COUNTRIES - known).map { CountryStat(it, 0, 0L, 0L) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val photoGpsCount: StateFlow<Int> =
+        countries.withGpsCount().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    private val _countryScan = MutableStateFlow<CountryScan>(CountryScan.Idle)
+    val countryScan: StateFlow<CountryScan> = _countryScan.asStateFlow()
+
+    /** Kameraposition der Laenderkarte, damit sie beim Tab-Wechsel erhalten bleibt. */
+    var countryCamera: CameraPosition? = null
+
+    /** Neue/geaenderte Fotos einlesen; laeuft im ViewModel weiter, auch wenn der Tab gewechselt wird. */
+    fun scanPhotoCountries() {
+        if (_countryScan.value is CountryScan.Running) return
+        _countryScan.value = CountryScan.Running(0, 0)
+        viewModelScope.launch {
+            _countryScan.value = try {
+                countries.scan { done, total -> _countryScan.value = CountryScan.Running(done, total) }
+                CountryScan.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                CountryScan.Error(e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    suspend fun countriesGeoJson(): String = withContext(Dispatchers.IO) { countries.lookup.geoJson }
+
+    suspend fun countryNames(): Map<String, String> = withContext(Dispatchers.Default) { countries.lookup.names }
 
     suspend fun photoFull(photo: TourPhoto, maxSide: Int): Bitmap? = photos.fullImage(photo, maxSide)
 
