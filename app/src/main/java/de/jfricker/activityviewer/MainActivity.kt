@@ -67,26 +67,26 @@ fun AppContent(vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         PrimaryScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Statistik") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Kalender") })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Aktivitäten") })
-            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Karte") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Aktivitäten") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Sync") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Statistik") })
+            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Kalender") })
             Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Heatmap") })
-            Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Strecken") })
+            Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("In der Nähe") })
             Tab(selected = tab == 6, onClick = { tab = 6 }, text = { Text("Rekorde") })
-            Tab(selected = tab == 7, onClick = { tab = 7 }, text = { Text("In der Nähe") })
-            Tab(selected = tab == 8, onClick = { tab = 8 }, text = { Text("Sync") })
+            Tab(selected = tab == 7, onClick = { tab = 7 }, text = { Text("Karte") })
+            Tab(selected = tab == 8, onClick = { tab = 8 }, text = { Text("Strecken") })
         }
         when (tab) {
-            0 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
-            1 -> CalendarScreen(vm)
-            2 -> ActivitiesScreen(vm)
-            3 -> WorldMapScreen(vm)
+            0 -> ActivitiesScreen(vm)
+            1 -> SyncScreen(vm)
+            2 -> StatsScreen(overview, skiSeasons, untilToday, vm::setUntilToday)
+            3 -> CalendarScreen(vm)
             4 -> HeatmapScreen(vm)
-            5 -> RoutesScreen(vm)
+            5 -> NearbyScreen(vm)
             6 -> RecordsScreen(vm)
-            7 -> NearbyScreen(vm)
-            else -> SyncScreen(vm)
+            7 -> WorldMapScreen(vm)
+            else -> RoutesScreen(vm)
         }
     }
 }
