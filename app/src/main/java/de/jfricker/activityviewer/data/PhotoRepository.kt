@@ -105,6 +105,8 @@ class PhotoRepository(private val context: Context) {
         }
     }
 
+    fun uriOf(id: Long): Uri = ContentUris.withAppendedId(collection, id)
+
     fun hasLocationAccess(): Boolean = granted(Manifest.permission.ACCESS_MEDIA_LOCATION)
 
     /** Alle Fotos der Galerie (ohne WhatsApp), fuer die Laenderkarte. */

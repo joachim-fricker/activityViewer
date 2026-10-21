@@ -203,6 +203,8 @@ class MainViewModel(
 
     suspend fun countryNames(): Map<String, String> = withContext(Dispatchers.Default) { countries.lookup.names }
 
+    suspend fun countryPhotos(country: String): List<TourPhoto> = countries.photosIn(country)
+
     suspend fun photoFull(photo: TourPhoto, maxSide: Int): Bitmap? = photos.fullImage(photo, maxSide)
 
     /** Track mit Hoehenprofil fuer das Tour-Poster (wirft IOException bei Netzwerkfehlern). */

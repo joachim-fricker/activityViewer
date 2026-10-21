@@ -221,7 +221,7 @@ internal fun PhotosSection(vm: MainViewModel, state: TourPhotosState, onOpen: (i
 }
 
 @Composable
-private fun PhotoThumb(vm: MainViewModel, photo: TourPhoto, modifier: Modifier) {
+internal fun PhotoThumb(vm: MainViewModel, photo: TourPhoto, modifier: Modifier) {
     val bmp by produceState<Bitmap?>(null, photo.id) { value = vm.photoThumbnail(photo) }
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
         bmp?.let {

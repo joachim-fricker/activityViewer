@@ -1,6 +1,7 @@
 package de.jfricker.activityviewer.data
 
 import android.content.Context
+import de.jfricker.activityviewer.domain.COUNTRY_OVERRIDES
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
@@ -37,6 +38,7 @@ class CountryLookup(private val context: Context) {
 
     /** Land an der Position; Punkte knapp ausserhalb (See, Kueste, grobe Grenze) gehen ans naechste Land. */
     fun countryAt(lat: Double, lon: Double): String? {
+        COUNTRY_OVERRIDES.firstOrNull { it.contains(lat, lon) }?.let { return it.country }
         countries.firstOrNull { it.inBox(lat, lon, 0.0) && it.contains(lat, lon) }?.let { return it.id }
         val pad = NEAR_M / M_PER_DEG / max(0.2, cos(lat * PI / 180))
         return countries

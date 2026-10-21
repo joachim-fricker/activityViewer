@@ -38,7 +38,7 @@ class ActivityViewerApp : Application() {
     val networkInfo by lazy { NetworkInfo(this) }
     val photoRepository by lazy { PhotoRepository(this) }
     val photoCountryRepository by lazy {
-        PhotoCountryRepository(photoRepository, database.photoLocationDao(), CountryLookup(this))
+        PhotoCountryRepository(this, photoRepository, database.photoLocationDao(), CountryLookup(this))
     }
     val repository by lazy {
         ActivityRepository(GitHubClient(), WorkflowClient(), database.activityDao())

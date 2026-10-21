@@ -2,6 +2,9 @@ package de.jfricker.activityviewer.data
 
 import de.jfricker.activityviewer.data.local.PhotoLocationDao
 import de.jfricker.activityviewer.data.local.PhotoLocationEntity
+import android.content.Context
+import de.jfricker.activityviewer.domain.COUNTRY_RULES_VERSION
+import de.jfricker.activityviewer.domain.GeoPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -15,6 +18,7 @@ import kotlinx.coroutines.withContext
  * Die Fotos werden einmal gescannt, danach nur noch neue oder geaenderte.
  */
 class PhotoCountryRepository(
+    context: Context,
     private val photos: PhotoRepository,
     private val dao: PhotoLocationDao,
     val lookup: CountryLookup
@@ -24,7 +28,10 @@ class PhotoCountryRepository(
     fun withGpsCount() = dao.withGpsCount()
 
     /** Gleicht den Cache mit der Galerie ab; liefert die Anzahl neu gelesener Fotos. */
+    private val prefs = context.getSharedPreferences("photo_countries", Context.MODE_PRIVATE)
+
     suspend fun scan(onProgress: (done: Int, total: Int) -> Unit): Int {
+        reassignIfRulesChanged()
         val all = photos.allPhotos()
         val known = dao.keys().associate { it.id to it.modified }
         val ids = all.mapTo(HashSet()) { it.id }
@@ -61,6 +68,27 @@ class PhotoCountryRepository(
         }
         return todo.size
     }
+
+    /** Neue Grenzregeln: Land fuer alle gespeicherten Positionen neu bestimmen. */
+    private suspend fun reassignIfRulesChanged() {
+        if (prefs.getInt(KEY_RULES, 0) == COUNTRY_RULES_VERSION) return
+        val rows = dao.withPosition()
+        val updated = withContext(Dispatchers.Default) {
+            rows.map { it.copy(country = lookup.countryAt(it.lat!!, it.lon!!)) }
+        }
+        updated.chunked(500).forEach { dao.upsertAll(it) }
+        prefs.edit().putInt(KEY_RULES, COUNTRY_RULES_VERSION).apply()
+    }
+
+    private companion object {
+        const val KEY_RULES = "rulesVersion"
+    }
+
+    /** Fotos aus einem Land, neueste zuerst. */
+    suspend fun photosIn(country: String): List<TourPhoto> =
+        dao.inCountry(country).map { r ->
+            TourPhoto(r.id, photos.uriOf(r.id), r.takenMs, r.lat?.let { lat -> r.lon?.let { GeoPoint(lat, it) } })
+        }
 
     /** Alles neu einlesen (z. B. nachdem der Zugriff auf die Foto-Positionen erlaubt wurde). */
     suspend fun reset() = dao.clear()

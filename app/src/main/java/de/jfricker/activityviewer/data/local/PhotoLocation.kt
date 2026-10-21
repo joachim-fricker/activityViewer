@@ -48,6 +48,12 @@ interface PhotoLocationDao {
     )
     fun countryStats(): Flow<List<CountryStat>>
 
+    @Query("SELECT * FROM photo_location WHERE lat IS NOT NULL AND lon IS NOT NULL")
+    suspend fun withPosition(): List<PhotoLocationEntity>
+
+    @Query("SELECT * FROM photo_location WHERE country = :country ORDER BY takenMs DESC")
+    suspend fun inCountry(country: String): List<PhotoLocationEntity>
+
     @Query("SELECT COUNT(*) FROM photo_location WHERE lat IS NOT NULL")
     fun withGpsCount(): Flow<Int>
 }

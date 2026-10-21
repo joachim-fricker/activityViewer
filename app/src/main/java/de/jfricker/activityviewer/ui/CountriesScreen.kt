@@ -1,5 +1,6 @@
 package de.jfricker.activityviewer.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -7,6 +8,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import de.jfricker.activityviewer.data.TourPhoto
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -98,6 +108,13 @@ fun CountriesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var showList by rememberSaveable { mutableStateOf(false) }
     var alphabetical by rememberSaveable { mutableStateOf(false) }
+    var photosOf by rememberSaveable { mutableStateOf<String?>(null) }
+
+    photosOf?.let { id ->
+        BackHandler { photosOf = null }
+        CountryPhotosScreen(vm, id, names[id] ?: id, onBack = { photosOf = null }, modifier)
+        return
+    }
 
     Column(modifier.fillMaxSize()) {
         if (access == PhotoAccess.NONE || !hasLocation) {
@@ -173,7 +190,11 @@ fun CountriesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     stats
                 }
             }
-            CountryList(sorted, names) { id -> selected = id; showList = false }
+            CountryList(
+                sorted, names,
+                onClick = { id -> selected = id; showList = false },
+                onPhotos = { photosOf = it }
+            )
         } else {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 CountryMap(vm, stats.map { it.country }.toSet(), selected) { selected = it }
@@ -182,6 +203,7 @@ fun CountriesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         name = names[id] ?: id,
                         stat = stats.firstOrNull { it.country == id },
                         onClose = { selected = null },
+                        onPhotos = { photosOf = id },
                         modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
                     )
                 }
@@ -191,7 +213,12 @@ fun CountriesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CountryList(stats: List<CountryStat>, names: Map<String, String>, onClick: (String) -> Unit) {
+private fun CountryList(
+    stats: List<CountryStat>,
+    names: Map<String, String>,
+    onClick: (String) -> Unit,
+    onPhotos: (String) -> Unit
+) {
     LazyColumn(Modifier.fillMaxSize()) {
         items(stats, key = { it.country }) { s ->
             Row(
@@ -209,7 +236,7 @@ private fun CountryList(stats: List<CountryStat>, names: Map<String, String>, on
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (s.cnt > 0) Text("${s.cnt} Fotos", style = MaterialTheme.typography.bodyMedium)
+                if (s.cnt > 0) TextButton(onClick = { onPhotos(s.country) }) { Text("${s.cnt} Fotos ›") }
             }
             HorizontalDivider()
         }
@@ -217,7 +244,13 @@ private fun CountryList(stats: List<CountryStat>, names: Map<String, String>, on
 }
 
 @Composable
-private fun CountryCard(name: String, stat: CountryStat?, onClose: () -> Unit, modifier: Modifier) {
+private fun CountryCard(
+    name: String,
+    stat: CountryStat?,
+    onClose: () -> Unit,
+    onPhotos: () -> Unit,
+    modifier: Modifier
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -237,6 +270,7 @@ private fun CountryCard(name: String, stat: CountryStat?, onClose: () -> Unit, m
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            if (stat != null && stat.cnt > 0) TextButton(onClick = onPhotos) { Text("Fotos") }
             TextButton(onClick = onClose) { Text("✕") }
         }
     }
@@ -326,3 +360,68 @@ private fun CountryMap(
 
     AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 }
+
+/** Alle Fotos eines Landes als Raster, nach Jahr gruppiert (neueste zuerst); Antippen = Vollbild. */
+@Composable
+private fun CountryPhotosScreen(
+    vm: MainViewModel,
+    country: String,
+    name: String,
+    onBack: () -> Unit,
+    modifier: Modifier
+) {
+    val photos by produceState<List<TourPhoto>?>(null, country) { value = vm.countryPhotos(country) }
+    var viewerIndex by rememberSaveable(country) { mutableIntStateOf(-1) }
+
+    val list = photos
+    if (list != null && viewerIndex in list.indices) {
+        BackHandler { viewerIndex = -1 }
+        PhotoViewer(vm, list, viewerIndex, onBack = { viewerIndex = -1 }, modifier)
+        return
+    }
+
+    Column(modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("← Zurück") }
+            Text(
+                if (list == null) name else "$name · ${list.size} Fotos",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        if (list == null) {
+            Text("Lade Fotos …", modifier = Modifier.padding(16.dp))
+            return@Column
+        }
+        val byYear = remember(list) {
+            list.withIndex().groupBy { YEAR.format(Instant.ofEpochMilli(it.value.takenMs).atZone(ZoneId.systemDefault())) }
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(96.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            byYear.forEach { (year, yearPhotos) ->
+                item(key = "y$year", span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        "$year · ${yearPhotos.size}",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp)
+                    )
+                }
+                items(yearPhotos, key = { it.value.id }) { (i, p) ->
+                    PhotoThumb(
+                        vm, p,
+                        Modifier
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { viewerIndex = i }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val YEAR = DateTimeFormatter.ofPattern("yyyy")
